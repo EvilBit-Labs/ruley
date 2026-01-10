@@ -1,0 +1,211 @@
+---
+globs: **/*.rs
+alwaysApply: false
+---
+
+# Rust Coding Standards for ruley
+
+## Language and Edition
+
+- Always use **Rust 2024 Edition** as specified in [Cargo.toml](mdc:Cargo.toml)
+- Follow the package configuration in [Cargo.toml](mdc:Cargo.toml) with
+  `unsafe_code = "forbid"`
+- Use Rust 2024 edition features where appropriate (see Rust 2024 Features
+  section)
+
+## Code Quality Requirements
+
+- **Zero warnings policy**: All code must pass `cargo clippy -- -D warnings`
+- **No unsafe code**: `unsafe_code = "forbid"` is enforced at package level
+- **Formatting**: Use standard `rustfmt` with project configuration (2024 style
+  edition)
+- **Error Handling**: Use `thiserror` for structured errors (public API),
+  `anyhow` for error context (internal code). See
+  [error-handling.mdc](mdc:.cursor/rules/rust/error-handling.mdc) for detailed
+  guidance.
+- **Async**: Async-first design using Tokio runtime for LLM API calls
+- **Focused and Manageable Files**: Source files should be focused and
+  manageable. Large files should be split into smaller, more focused files; no
+  larger than 500-600 lines, when possible.
+
+## Code Organization
+
+- Use trait-based interfaces for provider-agnostic design (`LLMProvider`,
+  `OutputFormatter`, `Compressor`)
+- Implement comprehensive error handling with thiserror (see `utils/error.rs`)
+- Use strongly-typed structures with serde for serialization
+- Follow module structure as defined in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md)
+- Prefer composition over inheritance (Rust doesn't have inheritance, but avoid
+  deep trait hierarchies)
+- Use modules to organize related functionality
+
+## Clippy and Linting
+
+- **Zero warnings**: All code must pass `cargo clippy -- -D warnings`
+- **Enable helpful lints**: Use clippy's `pedantic` and `nursery` lints where
+  appropriate
+- **Fix clippy suggestions**: Address all clippy warnings and suggestions
+- **Use `#[allow]` sparingly**: Only when necessary, with justification comments
+- **Modern clippy lints**: Enable and follow modern clippy recommendations for
+  Rust 2024
+
+## Module Structure
+
+- **cli/**: CLI argument parsing and configuration
+- **packer/**: Repository packing and file discovery
+- **llm/**: Multi-provider LLM integration
+- **generator/**: Rule generation logic
+- **output/**: Format-specific output formatters
+- **utils/**: Shared utilities
+
+## Rust 2024 Edition Features
+
+Use modern Rust 2024 features where appropriate:
+
+### Control Flow
+
+- **`let-else`**: Use for early returns with pattern matching
+
+  ```rust
+  let Ok(value) = result else {
+      return Err(RuleyError::Config("Invalid value".to_string()));
+  };
+  ```
+
+- **`if-let` chains**: Use for multiple pattern matches
+
+  ```rust
+  if let Some(provider) = config.provider
+      && let Some(model) = config.model {
+      // Use both values
+  }
+  ```
+
+### Async Features
+
+- **Async traits**: Use `async-trait` crate for trait methods (until native
+  async traits are stable)
+- **Async functions in traits**: Prefer `async fn` in trait definitions when
+  using `async-trait`
+- **Streams**: Use `futures::Stream` for streaming data (e.g., LLM streaming
+  responses)
+
+### Type System
+
+- **Newtype pattern**: Use for type safety and clarity
+
+  ```rust
+  pub struct TokenCount(pub usize);
+  pub struct ChunkSize(pub usize);
+  ```
+
+- **Strong typing**: Avoid stringly-typed code, use enums for fixed sets of
+  values
+
+  ```rust
+  pub enum OutputFormat {
+      Cursor,
+      Claude,
+      Copilot,
+      // ...
+  }
+  ```
+
+### Error Handling
+
+- **`?` operator**: Use for error propagation
+- **Error context**: Use `.context()` and `.with_context()` for adding context
+- **Structured errors**: Use `thiserror` for errors that callers might match on
+- **Error library usage**: See
+  [error-handling.mdc](mdc:.cursor/rules/rust/error-handling.mdc) for detailed
+  guidance on when to use `thiserror` vs `anyhow`
+  - `thiserror`: Public error types (`RuleyError` enum) that callers might match
+    on
+  - `anyhow`: Internal functions for convenient error context chaining
+
+## LLM Crate Integration
+
+The project uses the `llm` crate for provider abstraction. Follow these
+patterns:
+
+- **Trait-based design**: Implement `LLMProvider` trait for each provider
+- **Async trait methods**: Use `async-trait` for async methods in traits
+- **Error handling**: Convert provider-specific errors to `RuleyError`
+- **Type safety**: Use strongly-typed message and response types
+- **Resource management**: Properly handle API keys and connection lifecycle
+
+Example pattern:
+
+```rust
+use async_trait::async_trait;
+use crate::llm::provider::{LLMProvider, Message, CompletionOptions, CompletionResponse};
+use crate::utils::error::RuleyError;
+
+#[async_trait]
+impl LLMProvider for MyProvider {
+    async fn complete(
+        &self,
+        messages: &[Message],
+        options: &CompletionOptions,
+    ) -> Result<CompletionResponse, RuleyError> {
+        // Implementation
+    }
+}
+```
+
+## Modern Rust Patterns (Q1 2026)
+
+### Ownership and Borrowing
+
+- **Prefer borrowing**: Use `&str` over `String` when possible
+- **Slice patterns**: Use slice patterns for matching
+- **Iterator chains**: Use iterator methods for functional-style code
+- **Avoid unnecessary allocations**: Use `Cow<str>` when ownership is
+  conditional
+
+### Async Patterns
+
+- **`tokio::select!`**: Use for concurrent operations and cancellation
+- **`tokio::spawn`**: Use for concurrent tasks with proper error handling
+- **Streams**: Use `futures::Stream` for async iterators
+- **Backpressure**: Implement bounded channels for backpressure
+
+### Error Handling
+
+- **Result types**: Prefer `Result<T, E>` over panics
+- **Error context**: Always add context to errors for debugging using
+  `.context()` or `.with_context()`
+- **Error conversion**: Use `From` trait for automatic error conversion
+- **Error matching**: Use pattern matching for error handling when needed
+- **`thiserror` vs `anyhow`**:
+  - Use `thiserror` for public API error types (`Result<T, RuleyError>`) that
+    callers might match on
+  - Use `anyhow` for internal functions (`Result<T>`) where you want convenient
+    error context chaining
+  - See [error-handling.mdc](mdc:.cursor/rules/rust/error-handling.mdc) for
+    complete guidelines
+
+### Type Safety
+
+- **Avoid `unwrap()`**: Use `?` operator or proper error handling
+- **Avoid `as` casts**: Use `TryFrom`/`TryInto` for safe conversions
+- **Use `Option` appropriately**: Don't use `Option` when a value is always
+  required
+- **Strong types**: Use newtypes to prevent mixing similar types
+
+### Performance
+
+- **Zero-cost abstractions**: Trust the compiler, prefer clear code over
+  micro-optimizations
+- **Avoid premature optimization**: Profile first, optimize second
+- **Use `Vec::with_capacity`**: When size is known ahead of time
+- **Prefer `&[T]` over `&Vec<T>`**: More flexible and idiomatic
+
+## Testing Requirements
+
+- Include comprehensive tests with insta for snapshot testing
+- Test organization should follow the pattern in
+  [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md)
+- Use `#[tokio::test]` for async tests
+- Use `assert_cmd` for CLI integration tests
+- Test error conditions and edge cases

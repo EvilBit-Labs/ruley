@@ -1,0 +1,71 @@
+---
+globs: Cargo.toml
+---
+
+# Cargo.toml Standards for ruley
+
+## Package Configuration
+
+- Always use **Rust 2024 Edition** as specified in the package
+- Single crate structure (not a workspace)
+- Enforce lint policy via `[lints.rust]` to forbid unsafe code
+
+Example (`Cargo.toml` excerpt):
+
+```toml
+[package]
+name = "ruley"
+version = "0.1.0"
+edition = "2024"
+authors = ["UncleSp1d3r <unclesp1d3r@evilbitlabs.io>"]
+license = "Apache-2.0"
+description = "Make your codebase ruley - generate AI IDE rules from codebases"
+
+[lints.rust]
+unsafe_code = "forbid"
+```
+
+## Dependencies
+
+- Key dependencies should match the specification in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md):
+  - `tokio = { version = "1", features = ["full"] }` - Async runtime
+  - `clap = { version = "4", features = ["derive", "env"] }` - CLI parsing
+  - `serde = { version = "1", features = ["derive"] }` - Serialization
+  - `llm = { version = "0.1" }` - LLM provider abstraction (required)
+  - `reqwest = { version = "0.12", features = ["json", "stream"] }` - HTTP client for LLM provider APIs
+  - `async-trait = "0.1"` - Async trait support
+  - `futures = "0.3"` - Future utilities
+  - `tiktoken-rs = "0.6"` - Token counting
+  - `git2 = "0.19"` - Git operations
+  - `ignore = "0.4"` - Gitignore pattern matching
+  - `globset = "0.4"` - Glob pattern matching
+  - `tree-sitter = "0.24"` - Code parsing (optional, feature-gated)
+  - `tracing = "0.1"` - Logging
+  - `tracing-subscriber = { version = "0.3", features = ["env-filter"] }` - Logging subscriber
+  - `thiserror = "2"` - Error types
+  - `anyhow = "1"` - Error context
+  - `indicatif = "0.17"` - Progress bars
+  - `console = "0.15"` - Console utilities
+  - `toml = "0.8"` - TOML parsing
+  - `serde_json = "1"` - JSON serialization
+  - `once_cell = "1"` - Lazy static initialization
+  - `regex = "1"` - Regular expressions
+  - `chrono = "0.4"` - Date/time handling
+
+## Feature Flags
+
+- **LLM providers** (feature-gated): `anthropic`, `openai`, `ollama`, `openrouter`, `xai`, `groq`, `gemini`
+  - Each provider feature enables support for that specific LLM provider
+  - The `llm` crate is always included (not feature-gated)
+  - Provider implementations use `reqwest` and `async-trait` for API calls
+- **Compression languages** (feature-gated): `compression-typescript`, `compression-python`, `compression-rust`, `compression-go`
+  - Each compression language feature enables tree-sitter parsing for that language
+- **Default features**: `["anthropic", "openai", "compression-typescript"]`
+- **All providers**: `all-providers` feature enables all LLM provider features
+- **All compression**: `compression-all` feature enables all compression language features
+
+## Package Metadata
+
+- Include proper license (Apache-2.0)
+- Provide clear description and keywords
+- Include repository and homepage URLs

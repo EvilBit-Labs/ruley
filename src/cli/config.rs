@@ -16,12 +16,13 @@
 //! ```rust
 //! use ruley::cli::{args, config};
 //!
-//! let args = args::parse();
-//! let config = config::load(&args)?;
+//! let (args, presence) = args::parse();
+//! let file_config = config::load(&args)?;
+//! let merged = config::merge_config(&args, file_config, &presence);
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-use crate::cli::args::Args;
+use crate::cli::args::{Args, ArgsPresence};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -188,4 +189,115 @@ pub fn load(args: &Args) -> Result<Config> {
     settings
         .try_deserialize()
         .context("Failed to deserialize configuration")
+}
+
+/// Merge CLI arguments with loaded configuration to create final merged config.
+/// CLI arguments have highest precedence when explicitly provided, followed by
+/// environment variables (already merged into config), then config files.
+///
+/// The `presence` parameter indicates which CLI arguments were explicitly provided
+/// on the command line, allowing us to distinguish between CLI defaults and user intent.
+pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> crate::MergedConfig {
+    // Provider: use CLI if explicitly provided, otherwise fall back to config
+    let provider = if presence.provider {
+        args.provider.clone()
+    } else if !config.general.provider.is_empty() {
+        config.general.provider.clone()
+    } else {
+        args.provider.clone() // Fall back to CLI default
+    };
+
+    // Format: use CLI if explicitly provided, otherwise fall back to config
+    let format: Vec<String> = if presence.format {
+        args.format.iter().map(|f| f.as_str().to_string()).collect()
+    } else if !config.general.format.is_empty() {
+        config.general.format.clone()
+    } else if !config.output.formats.is_empty() {
+        config.output.formats.clone()
+    } else {
+        // Fall back to CLI default
+        args.format.iter().map(|f| f.as_str().to_string()).collect()
+    };
+
+    // Rule type: use CLI if explicitly provided, otherwise fall back to config
+    let rule_type = if presence.rule_type {
+        args.rule_type.clone()
+    } else if !config.general.rule_type.is_empty() {
+        config.general.rule_type.clone()
+    } else {
+        args.rule_type.clone() // Fall back to CLI default
+    };
+
+    // Compress: use CLI if explicitly provided, otherwise fall back to config
+    let compress = if presence.compress {
+        args.compress
+    } else {
+        config.general.compress
+    };
+
+    // Chunk size: use CLI if explicitly provided, otherwise fall back to config
+    let chunk_size = if presence.chunk_size {
+        args.chunk_size
+    } else if config.general.chunk_size != default_chunk_size() {
+        config.general.chunk_size
+    } else if let Some(ref chunking) = config.chunking {
+        chunking.chunk_size.unwrap_or(args.chunk_size)
+    } else {
+        args.chunk_size // Fall back to CLI default
+    };
+
+    // No confirm: use CLI if explicitly provided, otherwise fall back to config
+    let no_confirm = if presence.no_confirm {
+        args.no_confirm
+    } else {
+        config.general.no_confirm
+    };
+
+    // Path: always use CLI value (no config file equivalent)
+    let path = args.path.clone();
+
+    // Output: always use CLI value (no config file equivalent)
+    let output = args.output.clone();
+
+    // Repomix file: always use CLI value (no config file equivalent)
+    let repomix_file = args.repomix_file.clone();
+
+    // Merge include patterns: CLI args take precedence, then config file
+    let include = if args.include.is_empty() {
+        config.include.patterns
+    } else {
+        args.include.clone()
+    };
+
+    // Merge exclude patterns: CLI args take precedence, then config file
+    let exclude = if args.exclude.is_empty() {
+        config.exclude.patterns
+    } else {
+        args.exclude.clone()
+    };
+
+    // Create output_paths HashMap from config.output.paths
+    let output_paths = config.output.paths;
+
+    crate::MergedConfig {
+        provider,
+        model: args.model.clone().or(config.general.model),
+        format,
+        output,
+        repomix_file,
+        path,
+        description: args.description.clone(),
+        rule_type,
+        include,
+        exclude,
+        compress,
+        chunk_size,
+        no_confirm,
+        dry_run: args.dry_run,
+        verbose: args.verbose,
+        quiet: args.quiet,
+        chunking: config.chunking,
+        output_paths,
+        providers: config.providers,
+    }
 }

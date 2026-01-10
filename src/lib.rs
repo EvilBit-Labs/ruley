@@ -9,7 +9,11 @@
 //! 4. **Analyzing** - LLM analysis and rule generation
 //! 5. **Formatting** - Converting LLM output to target formats
 //! 6. **Writing** - Writing output files to disk
-//! 7. **Complete** - Pipeline completed successfully
+//! 7. **Validating** - Validation of generated outputs
+//! 8. **Finalizing** - Post-processing and finalization
+//! 9. **Reporting** - Reporting and summary generation
+//! 10. **Cleanup** - Cleanup of temporary files and resources
+//! 11. **Complete** - Pipeline completed successfully
 //!
 //! ## Architecture
 //!
@@ -37,7 +41,7 @@ pub mod output;
 pub mod packer;
 pub mod utils;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cli::config::{ChunkingConfig, ProvidersConfig};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -90,18 +94,26 @@ pub struct MergedConfig {
 /// Tracks the current stage of pipeline execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PipelineStage {
-    /// Initial setup and configuration validation
+    /// Stage 1: Initial setup and configuration validation
     Init,
-    /// Repository scanning and file discovery
+    /// Stage 2: Repository scanning and file discovery
     Scanning,
-    /// Optional tree-sitter compression of source files
+    /// Stage 3: Optional tree-sitter compression of source files
     Compressing,
-    /// LLM analysis and rule generation
+    /// Stage 4: LLM analysis and rule generation
     Analyzing,
-    /// Converting LLM output to target formats
+    /// Stage 5: Converting LLM output to target formats
     Formatting,
-    /// Writing output files to disk
+    /// Stage 6: Writing output files to disk
     Writing,
+    /// Stage 7: Validation of generated outputs
+    Validating,
+    /// Stage 8: Post-processing and finalization
+    Finalizing,
+    /// Stage 9: Reporting and summary generation
+    Reporting,
+    /// Stage 10: Cleanup of temporary files and resources
+    Cleanup,
     /// Pipeline completed successfully
     Complete,
 }
@@ -153,12 +165,12 @@ impl ProgressTracker {
     }
 }
 
-/// Context carries state through all pipeline stages.
+/// PipelineContext carries state through all pipeline stages.
 /// This is the primary state container passed through all pipeline operations,
 /// containing the resolved configuration, current execution stage, temporary
 /// file tracking, and progress information.
 #[derive(Debug)]
-pub struct Context {
+pub struct PipelineContext {
     /// Final resolved configuration from all sources
     pub config: MergedConfig,
     /// Current pipeline execution stage
@@ -169,8 +181,8 @@ pub struct Context {
     pub progress: ProgressTracker,
 }
 
-impl Context {
-    /// Create a new Context with the given merged configuration.
+impl PipelineContext {
+    /// Create a new PipelineContext with the given merged configuration.
     /// Initializes with PipelineStage::Init and empty tracking structures.
     pub fn new(config: MergedConfig) -> Self {
         Self {
@@ -187,12 +199,144 @@ impl Context {
     }
 }
 
-pub async fn run() -> Result<()> {
-    let args = cli::args::parse();
-    let _config = cli::config::load(&args)?;
+pub async fn run(config: MergedConfig) -> Result<()> {
+    // Initialize logging based on verbosity level
+    let level = match config.verbose {
+        0 => tracing::Level::INFO,
+        1 => tracing::Level::DEBUG,
+        _ => tracing::Level::TRACE,
+    };
+    tracing_subscriber::fmt()
+        .with_max_level(level)
+        .with_target(false)
+        .without_time()
+        .init();
 
-    // TODO: Implement orchestrator
-    tracing::info!("ruley initialized");
+    // Log version and configuration summary
+    tracing::info!("ruley v{} starting", env!("CARGO_PKG_VERSION"));
+    tracing::debug!(
+        "Configuration: provider={}, model={:?}, format={:?}, compress={}, chunk_size={}",
+        config.provider,
+        config.model,
+        config.format,
+        config.compress,
+        config.chunk_size
+    );
+
+    // Initialize context
+    let mut ctx = PipelineContext::new(config);
+
+    // Stage 1: Init (Configuration Validation)
+    ctx.set_stage(PipelineStage::Init);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Init);
+
+    // Validate repository path exists
+    if !ctx.config.path.exists() {
+        return Err(anyhow::anyhow!(
+            "Repository path does not exist: {}",
+            ctx.config.path.display()
+        ))
+        .context("Failed to validate repository path");
+    }
+
+    // Check for dry-run mode
+    if ctx.config.dry_run {
+        display_dry_run_config(&ctx.config);
+        return Ok(());
+    }
+
+    // Stage 2: Scanning - TODO placeholder
+    ctx.set_stage(PipelineStage::Scanning);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Scanning);
+    // TODO: Implement repository scanning (Ticket 2)
+
+    // Stage 3: Compressing - TODO placeholder
+    ctx.set_stage(PipelineStage::Compressing);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Compressing);
+    // TODO: Implement tree-sitter compression (Ticket 3)
+
+    // Stage 4: Analyzing - TODO placeholder
+    ctx.set_stage(PipelineStage::Analyzing);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Analyzing);
+    // TODO: Implement LLM analysis (Ticket 4)
+
+    // Stage 5: Formatting - TODO placeholder
+    ctx.set_stage(PipelineStage::Formatting);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Formatting);
+    // TODO: Implement output formatting (Ticket 5)
+
+    // Stage 6: Writing - TODO placeholder
+    ctx.set_stage(PipelineStage::Writing);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Writing);
+    // TODO: Implement file writing (Ticket 6)
+
+    // Stage 7: Validating - TODO placeholder
+    ctx.set_stage(PipelineStage::Validating);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Validating);
+    // TODO: Implement output validation (Ticket 7)
+
+    // Stage 8: Finalizing - TODO placeholder
+    ctx.set_stage(PipelineStage::Finalizing);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Finalizing);
+    // TODO: Implement post-processing and finalization (Ticket 8)
+
+    // Stage 9: Reporting - TODO placeholder
+    ctx.set_stage(PipelineStage::Reporting);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Reporting);
+    // TODO: Implement reporting and summary generation (Ticket 9)
+
+    // Stage 10: Cleanup
+    ctx.set_stage(PipelineStage::Cleanup);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Cleanup);
+    cleanup_temp_files(&mut ctx).context("Failed to cleanup temporary files")?;
+
+    // Pipeline Complete
+    ctx.set_stage(PipelineStage::Complete);
+    tracing::info!("Pipeline stage: {:?}", PipelineStage::Complete);
+    tracing::info!("Pipeline completed successfully");
 
     Ok(())
+}
+
+/// Cleanup temporary files created during pipeline execution.
+fn cleanup_temp_files(ctx: &mut PipelineContext) -> Result<()> {
+    let file_count = ctx.temp_files.files.len();
+    ctx.temp_files
+        .clear()
+        .context("Failed to remove temporary files")?;
+
+    tracing::debug!("Cleaned up {} temporary files", file_count);
+    Ok(())
+}
+
+/// Display configuration summary for dry-run mode.
+fn display_dry_run_config(config: &MergedConfig) {
+    let include_str = if config.include.is_empty() {
+        "none".to_string()
+    } else {
+        config.include.join(", ")
+    };
+
+    let exclude_str = if config.exclude.is_empty() {
+        "none".to_string()
+    } else {
+        config.exclude.join(", ")
+    };
+
+    println!("Dry Run Mode - Configuration Summary");
+    println!("=====================================");
+    println!("Provider:     {}", config.provider);
+    println!(
+        "Model:        {}",
+        config.model.as_deref().unwrap_or("default")
+    );
+    println!("Format:       {}", config.format.join(", "));
+    println!("Path:         {}", config.path.display());
+    println!("Compress:     {}", config.compress);
+    println!("Chunk Size:   {}", config.chunk_size);
+    println!("Include:      {}", include_str);
+    println!("Exclude:      {}", exclude_str);
+    println!("No Confirm:   {}", config.no_confirm);
+    println!();
+    println!("No LLM calls will be made.");
 }

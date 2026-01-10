@@ -7,23 +7,28 @@ alwaysApply: false
 
 ## Configuration Architecture
 
-ruley uses hierarchical configuration with multiple sources as specified in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md), using **idiomatic clap techniques**:
+ruley uses hierarchical configuration with multiple sources as specified in
+[PROJECT_SPEC.md](mdc:PROJECT_SPEC.md), using **idiomatic clap techniques**:
 
 1. **Command-line flags** (highest precedence) - parsed by clap
 2. **Environment variables** - automatically read by clap via `env` attribute
-3. **Configuration file** (`ruley.toml` in project root or `--config` path) - loaded and merged
-4. **Embedded defaults** (lowest precedence) - set via clap `default_value` or `Default` trait
+3. **Configuration file** (`ruley.toml` in project root or `--config` path) -
+   loaded and merged
+4. **Embedded defaults** (lowest precedence) - set via clap `default_value` or
+   `Default` trait
 
 ### Clap Integration
 
 - Use `#[arg(env = "RULEY_*")]` to automatically read from environment variables
 - Use `value_parser` for validation instead of manual checks
 - Load config file first, then parse clap args (clap args override config file)
-- Use `ArgAction::Count` for verbosity flags, `ArgAction::SetTrue` for boolean flags
+- Use `ArgAction::Count` for verbosity flags, `ArgAction::SetTrue` for boolean
+  flags
 
 ## Configuration Structure
 
-Define configuration using serde with TOML format as specified in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md):
+Define configuration using serde with TOML format as specified in
+[PROJECT_SPEC.md](mdc:PROJECT_SPEC.md):
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -99,10 +104,12 @@ pub struct ProviderConfigs {
 
 ## Configuration Loading with Clap
 
-Use clap's built-in environment variable support and merge with config file. The idiomatic approach:
+Use clap's built-in environment variable support and merge with config file. The
+idiomatic approach:
 
 1. **Load config file first** (if exists)
-2. **Parse clap args** (which automatically reads from environment variables via `env` attribute)
+2. **Parse clap args** (which automatically reads from environment variables via
+   `env` attribute)
 3. **Merge**: clap args override config file values
 
 ### Clap Args with Environment Variable Support
@@ -225,7 +232,8 @@ pub struct Args {
 
 ## Configuration Validation
 
-Use clap's `value_parser` for validation instead of manual checks. This provides better error messages and integrates with clap's help system:
+Use clap's `value_parser` for validation instead of manual checks. This provides
+better error messages and integrates with clap's help system:
 
 ```rust
 use clap::{Parser, value_parser};
@@ -302,9 +310,10 @@ impl FinalConfig {
         }
     }
 }
-```
+
 
 # [derive(Debug, thiserror::Error)]
+
 pub enum ConfigError {
     #[error("Invalid provider: {0}")]
     InvalidProvider(String),
@@ -324,7 +333,6 @@ pub enum ConfigError {
     #[error("Failed to parse config file: {0}")]
     ParseError(String),
 }
-
 ```
 
 ## Environment Variable Mapping
@@ -468,7 +476,7 @@ no_confirm = true
 
 Document configuration options:
 
-```rust
+````rust
 /// ruley configuration structure.
 ///
 /// Configuration is loaded from multiple sources in order of precedence:
@@ -513,4 +521,4 @@ Document configuration options:
 pub struct Config {
     // ... fields
 }
-```
+````

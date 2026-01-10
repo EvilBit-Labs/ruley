@@ -1,0 +1,77 @@
+---
+globs: src/main.rs,src/cli/**
+---
+
+# CLI Design Standards for ruley
+
+## Command Structure
+
+Use clap v4 with derive macros as specified in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md):
+
+```rust
+#[derive(Parser)]
+#[command(name = "ruley", about = "Make your codebase ruley")]
+pub struct Cli {
+    /// Path to repository (local path or remote URL)
+    #[arg(default_value = ".")]
+    pub path: Option<PathBuf>,
+
+    /// LLM provider
+    #[arg(short, long, default_value = "anthropic")]
+    pub provider: Provider,
+
+    /// Model to use
+    #[arg(short, long)]
+    pub model: Option<String>,
+
+    /// Output format(s), comma-separated
+    #[arg(short, long, default_value = "cursor")]
+    pub format: Vec<OutputFormat>,
+
+    /// Output file path
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+
+    /// Enable tree-sitter compression
+    #[arg(long)]
+    pub compress: bool,
+
+    /// Skip cost confirmation prompt
+    #[arg(long)]
+    pub no_confirm: bool,
+
+    /// Show what would be processed without calling LLM
+    #[arg(long)]
+    pub dry_run: bool,
+}
+```
+
+## Output Formatting
+
+- Support multiple output formats: Cursor (.mdc), Claude (CLAUDE.md), Copilot, Windsurf, Aider, Generic, JSON
+- Use `--format` flag with comma-separated values or `all` for all formats
+- Respect `NO_COLOR` and `TERM=dumb` for color handling
+- Provide clear error messages with actionable suggestions
+- Show progress bars for long-running operations using `indicatif`
+
+## Configuration Management
+
+Support hierarchical configuration with precedence:
+
+1. Command-line flags (highest precedence)
+2. Environment variables (`RULEY_*`, provider-specific keys like `ANTHROPIC_API_KEY`)
+3. Configuration file (`ruley.toml` in project root or `--config` path)
+4. Embedded defaults (lowest precedence)
+
+## Cost Estimation
+
+- Always show estimated cost before LLM calls (unless `--no-confirm`)
+- Require user confirmation for expensive operations
+- Display token counts and pricing information transparently
+
+## Error Handling
+
+- Use structured error types with thiserror (see `utils/error.rs`)
+- Provide detailed error messages with actionable suggestions
+- Handle rate limiting with exponential backoff retry logic
+- Test error conditions with insta snapshot tests

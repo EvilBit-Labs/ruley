@@ -1,0 +1,84 @@
+---
+globs: justfile
+---
+
+# Justfile Standards for ruley
+
+## Task Runner Principles
+
+Use DRY principles in justfile recipes. Keep commands simple and focused on common development tasks.
+
+## Core Commands
+
+When creating the justfile, include these standard commands:
+
+- `just fmt`: Format all code with `cargo fmt`
+- `just fmt-check`: Check formatting without modifying files (`cargo fmt -- --check`)
+- `just lint`: Run rustfmt check and clippy with zero warnings policy
+- `just build`: Build the project (`cargo build`)
+- `just build-release`: Build optimized release (`cargo build --release`)
+- `just check`: Check the project without building (`cargo check`)
+- `just test`: Run all tests (`cargo test`)
+- `just clippy`: Run clippy with zero warnings (`cargo clippy -- -D warnings`)
+
+## CLI-Specific Commands
+
+- `just run args=''`: Run the ruley binary with optional arguments (`cargo run -- {{ args }}`)
+- `just run-release args=''`: Run the release binary with optional arguments
+
+## Shell Configuration
+
+- Use `set shell := ["bash", "-eu", "-o", "pipefail", "-c"]` for strict error handling
+- Ensure all commands fail fast on errors
+- Use proper argument passing with `{{ args }}`
+
+## Development Workflow
+
+- Always run `just lint` before committing
+- Use `just test` to validate changes
+- Use `just build` to check compilation
+- Use `just run` to test the CLI with various arguments
+
+## Example Structure
+
+```just
+# Default recipe
+default:
+    @just --list
+
+# Formatting
+fmt:
+    cargo fmt
+
+fmt-check:
+    cargo fmt -- --check
+
+# Linting
+lint:
+    cargo fmt -- --check
+    cargo clippy -- -D warnings
+
+clippy:
+    cargo clippy -- -D warnings
+
+# Building
+build:
+    cargo build
+
+build-release:
+    cargo build --release
+
+check:
+    cargo check
+
+# Testing
+test:
+    cargo test
+
+# Running
+run args='':
+    cargo run -- {{ args }}
+
+run-release args='':
+    cargo run --release -- {{ args }}
+```

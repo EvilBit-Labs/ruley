@@ -1,24 +1,22 @@
 # ruley - Project Specification
 
-> Make your codebase ruley. A Rust CLI tool for generating AI IDE rules from
-> codebases.
+> Make your codebase ruley. A Rust CLI tool for generating AI IDE rules from codebases.
 
-**Version:** 0.1.0-spec **License:** Apache-2.0 **Status:** Specification Draft
-**Crate:** `ruley` **Repository:** `github.com/EvilBit-Labs/ruley`
+**Version:** 0.1.0-spec **License:** Apache-2.0 **Status:** Specification Draft **Crate:** `ruley` **Repository:** `github.com/EvilBit-Labs/ruley`
 
 ---
 
 ## Table of Contents
 
-1. [Project Overview](#project-overview)
-2. [Acknowledgments](#acknowledgments)
-3. [Goals and Non-Goals](#goals-and-non-goals)
-4. [Feature Requirements](#feature-requirements)
-5. [Architecture](#architecture)
-6. [CLI Interface](#cli-interface)
-7. [Configuration](#configuration)
-8. [Technical Specifications](#technical-specifications)
-9. [Dependencies](#dependencies)
+01. [Project Overview](#project-overview)
+02. [Acknowledgments](#acknowledgments)
+03. [Goals and Non-Goals](#goals-and-non-goals)
+04. [Feature Requirements](#feature-requirements)
+05. [Architecture](#architecture)
+06. [CLI Interface](#cli-interface)
+07. [Configuration](#configuration)
+08. [Technical Specifications](#technical-specifications)
+09. [Dependencies](#dependencies)
 10. [Implementation Plan](#implementation-plan)
 11. [Testing Strategy](#testing-strategy)
 12. [Distribution](#distribution)
@@ -28,38 +26,28 @@
 
 ## Project Overview
 
-**ruley** (the opposite of _unruly_) is a command-line tool that analyzes
-codebases and generates AI IDE rule files. It uses Large Language Models to
-understand project structure, conventions, and patterns, then produces
-actionable rules that help AI assistants provide better, context-aware code
-suggestions.
+**ruley** (the opposite of _unruly_) is a command-line tool that analyzes codebases and generates AI IDE rule files. It uses Large Language Models to understand project structure, conventions, and patterns, then produces actionable rules that help AI assistants provide better, context-aware code suggestions.
 
 Tame your unruly codebase. Make it _ruley_.
 
 ### Key Value Proposition
 
-- **Single binary distribution** - No runtime dependencies (Node.js, Python,
-  etc.)
+- **Single binary distribution** - No runtime dependencies (Node.js, Python, etc.)
 - **Multi-provider LLM support** - Choose your preferred AI backend
 - **Native performance** - Fast codebase analysis using Rust
-- **Smart compression** - Tree-sitter based code compression for token
-  efficiency
+- **Smart compression** - Tree-sitter based code compression for token efficiency
 - **Accurate token counting** - Native tiktoken implementation
 
 ---
 
 ## Acknowledgments
 
-This project is inspired by [rulefy](https://github.com/niklub/rulefy) by
-niklub, licensed under MIT. While ruley is a cleanroom implementation with
-independent architecture decisions, we acknowledge rulefy for pioneering the
-concept of automated AI IDE rule generation.
+This project is inspired by [rulefy](https://github.com/niklub/rulefy) by niklub, licensed under MIT. While ruley is a cleanroom implementation with independent architecture decisions, we acknowledge rulefy for pioneering the concept of automated AI IDE rule generation.
 
 Other inspirations:
 
 - [repomix](https://github.com/yamadashy/repomix) - Repository packing concepts
-- [awesome-cursorrules](https://github.com/PatrickJS/awesome-cursorrules) -
-  Cursor rules best practices
+- [awesome-cursorrules](https://github.com/PatrickJS/awesome-cursorrules) - Cursor rules best practices
 
 ---
 
@@ -68,12 +56,10 @@ Other inspirations:
 ### Goals
 
 1. **Standalone binary** - Zero runtime dependencies
-2. **Multi-provider LLM support** - OpenAI, Anthropic, xAI, Ollama, OpenRouter,
-   etc.
+2. **Multi-provider LLM support** - OpenAI, Anthropic, xAI, Ollama, OpenRouter, etc.
 3. **Local-first** - Work with local repositories without network for packing
 4. **Token-efficient** - Tree-sitter compression to reduce LLM costs
-5. **Extensible output formats** - Start with Cursor `.mdc`, design for future
-   formats
+5. **Extensible output formats** - Start with Cursor `.mdc`, design for future formats
 6. **Cross-platform** - Linux, macOS, Windows support
 7. **Configurable** - TOML/YAML config files, environment variables, CLI flags
 8. **Transparent pricing** - Show estimated costs before LLM calls
@@ -424,8 +410,8 @@ pub struct GeneratedRules {
 }
 
 pub struct Convention {
-    pub category: String,      // "naming", "code-style", "testing", etc.
-    pub rule: String,          // The actual convention
+    pub category: String, // "naming", "code-style", "testing", etc.
+    pub rule: String,     // The actual convention
     pub rationale: Option<String>,
     pub examples: Vec<Example>,
 }
@@ -433,7 +419,7 @@ pub struct Convention {
 pub struct Example {
     pub description: String,
     pub code: String,
-    pub is_valid: bool,        // true = good example, false = anti-pattern
+    pub is_valid: bool, // true = good example, false = anti-pattern
 }
 ```
 
@@ -583,12 +569,18 @@ ruley/                         # "Make your codebase ruley"
 #[async_trait]
 pub trait LLMProvider: Send + Sync {
     /// Generate a completion from messages
-    async fn complete(&self, messages: &[Message], options: &CompletionOptions)
-        -> Result<CompletionResponse>;
+    async fn complete(
+        &self,
+        messages: &[Message],
+        options: &CompletionOptions,
+    ) -> Result<CompletionResponse>;
 
     /// Stream a completion (optional)
-    async fn complete_stream(&self, messages: &[Message], options: &CompletionOptions)
-        -> Result<impl Stream<Item = Result<StreamChunk>>>;
+    async fn complete_stream(
+        &self,
+        messages: &[Message],
+        options: &CompletionOptions,
+    ) -> Result<impl Stream<Item = Result<StreamChunk>>>;
 
     /// Get the model name
     fn model(&self) -> &str;
@@ -763,23 +755,23 @@ json = "ai-rules.json"
 [include]
 # Glob patterns to include
 patterns = [
-    "**/*.ts",
-    "**/*.tsx",
-    "**/*.js",
-    "**/*.jsx",
-    "**/*.py",
-    "**/*.rs",
-    "**/*.go",
+  "**/*.ts",
+  "**/*.tsx",
+  "**/*.js",
+  "**/*.jsx",
+  "**/*.py",
+  "**/*.rs",
+  "**/*.go",
 ]
 
 [exclude]
 # Glob patterns to exclude (in addition to .gitignore)
 patterns = [
-    "**/node_modules/**",
-    "**/target/**",
-    "**/dist/**",
-    "**/.git/**",
-    "**/vendor/**",
+  "**/node_modules/**",
+  "**/target/**",
+  "**/dist/**",
+  "**/.git/**",
+  "**/vendor/**",
 ]
 
 [providers.anthropic]
@@ -858,8 +850,7 @@ Use `tiktoken-rs` for accurate token counting:
 
 ### Tree-sitter Compression
 
-Compression extracts signatures and structure while removing implementation
-details:
+Compression extracts signatures and structure while removing implementation details:
 
 **Before (TypeScript):**
 
@@ -932,7 +923,10 @@ pub enum RuleyError {
     Provider { provider: String, message: String },
 
     #[error("Rate limited by {provider}, retry after {retry_after:?}")]
-    RateLimited { provider: String, retry_after: Option<Duration> },
+    RateLimited {
+        provider: String,
+        retry_after: Option<Duration>,
+    },
 
     #[error("Token limit exceeded: {tokens} tokens > {limit} limit")]
     TokenLimitExceeded { tokens: usize, limit: usize },
@@ -950,19 +944,19 @@ pub enum RuleyError {
 ```rust
 pub struct RetryConfig {
     /// Maximum retry attempts
-    pub max_retries: u32,          // default: 3
+    pub max_retries: u32, // default: 3
 
     /// Initial backoff duration
     pub initial_backoff: Duration, // default: 1s
 
     /// Maximum backoff duration
-    pub max_backoff: Duration,     // default: 60s
+    pub max_backoff: Duration, // default: 60s
 
     /// Backoff multiplier
-    pub multiplier: f64,           // default: 2.0
+    pub multiplier: f64, // default: 2.0
 
     /// Add jitter to prevent thundering herd
-    pub jitter: bool,              // default: true
+    pub jitter: bool, // default: true
 }
 ```
 
@@ -1023,7 +1017,7 @@ tiktoken-rs = "0.6"
 git2 = "0.19"
 
 # File matching
-ignore = "0.4"      # ripgrep's gitignore library
+ignore = "0.4"  # ripgrep's gitignore library
 globset = "0.4"
 
 # Tree-sitter (feature-gated per language)
@@ -1066,7 +1060,15 @@ openrouter = []
 xai = []
 groq = []
 gemini = []
-all-providers = ["anthropic", "openai", "ollama", "openrouter", "xai", "groq", "gemini"]
+all-providers = [
+  "anthropic",
+  "openai",
+  "ollama",
+  "openrouter",
+  "xai",
+  "groq",
+  "gemini",
+]
 
 # Compression languages
 compression-typescript = ["tree-sitter-typescript"]
@@ -1074,10 +1076,10 @@ compression-python = ["tree-sitter-python"]
 compression-rust = ["tree-sitter-rust"]
 compression-go = ["tree-sitter-go"]
 compression-all = [
-    "compression-typescript",
-    "compression-python",
-    "compression-rust",
-    "compression-go"
+  "compression-typescript",
+  "compression-python",
+  "compression-rust",
+  "compression-go",
 ]
 
 [profile.release]
@@ -1199,7 +1201,9 @@ async fn test_remote_repo_clone() {
 #[ignore] // Requires API key
 async fn test_llm_generation() {
     let provider = AnthropicProvider::from_env().unwrap();
-    let result = provider.complete(&test_messages(), &default_options()).await;
+    let result = provider
+        .complete(&test_messages(), &default_options())
+        .await;
     assert!(result.is_ok());
 }
 ```
@@ -1232,8 +1236,7 @@ tests/
 
 ### Binary Releases
 
-Build for all major platforms using
-[GoReleaser](https://goreleaser.com/customization/builds/rust/):
+Build for all major platforms using [GoReleaser](https://goreleaser.com/customization/builds/rust/):
 
 | Platform    | Target                      |
 | ----------- | --------------------------- |
@@ -1271,7 +1274,7 @@ builds:
 
 archives:
   - format: tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
     format_overrides:
       - goos: windows
         format: zip
@@ -1280,20 +1283,20 @@ archives:
       - README.md
 
 checksum:
-  name_template: "checksums.txt"
+  name_template: checksums.txt
 
 changelog:
   sort: asc
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
 
 brews:
   - name: ruley
     homepage: https://github.com/EvilBit-Labs/ruley
-    description: "Make your codebase ruley - generate AI IDE rules from codebases"
+    description: Make your codebase ruley - generate AI IDE rules from codebases
     license: Apache-2.0
     repository:
       owner: EvilBit-Labs
@@ -1305,7 +1308,8 @@ brews:
 # Publish to crates.io on release
 after:
   hooks:
-    - cmd: "cargo publish {{ if .IsSnapshot }}--dry-run{{ end }} --quiet --no-verify"
+    - cmd: cargo publish {{ if .IsSnapshot }}--dry-run{{ end }} --quiet 
+        --no-verify
 ```
 
 ### Prerequisites for GoReleaser Rust Builds
@@ -1360,7 +1364,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - v*
 
 permissions:
   contents: write
@@ -1394,7 +1398,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          version: "~> v2"
+          version: ~> v2
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

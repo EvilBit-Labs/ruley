@@ -1,13 +1,10 @@
 # ruley Agent Guidelines
 
-This document provides unified guidance for AI agents working on the ruley
-project. It synthesizes all project rules and standards into actionable
-directives.
+This document provides unified guidance for AI agents working on the ruley project. It synthesizes all project rules and standards into actionable directives.
 
 ## Project Overview
 
-**ruley** is a single-crate Rust CLI tool for generating AI IDE rules from
-codebases.
+**ruley** is a single-crate Rust CLI tool for generating AI IDE rules from codebases.
 
 ### Core Architecture
 
@@ -19,13 +16,10 @@ codebases.
 ### Module Structure
 
 1. **cli/**: Command-line interface with clap argument parsing
-2. **packer/**: Repository packing (file discovery, gitignore, git operations,
-   compression)
-3. **llm/**: Multi-provider LLM integration (Anthropic, OpenAI, Ollama,
-   OpenRouter, etc.)
+2. **packer/**: Repository packing (file discovery, gitignore, git operations, compression)
+3. **llm/**: Multi-provider LLM integration (Anthropic, OpenAI, Ollama, OpenRouter, etc.)
 4. **generator/**: Rule generation logic and prompt templates
-5. **output/**: Multi-format output formatters (Cursor, Claude, Copilot,
-   Windsurf, Aider, etc.)
+5. **output/**: Multi-format output formatters (Cursor, Claude, Copilot, Windsurf, Aider, etc.)
 6. **utils/**: Shared utilities (error types, progress bars)
 
 ### Architecture Principles
@@ -50,8 +44,7 @@ codebases.
 - **Zero warnings**: All code must pass `cargo clippy -- -D warnings`
 - **No unsafe code**: `unsafe_code = "forbid"` enforced at package level
 - **Formatting**: Use standard `rustfmt` with project configuration
-- **File size**: Keep files focused and manageable (500-600 lines max when
-  possible)
+- **File size**: Keep files focused and manageable (500-600 lines max when possible)
 
 ### Code Organization
 
@@ -66,10 +59,8 @@ codebases.
 - **Ownership**: Prefer borrowing (`&str` over `String` when possible)
 - **Iterators**: Use iterator methods for functional-style code
 - **Avoid allocations**: Use `Cow<str>` when ownership is conditional
-- **Type safety**: Avoid `unwrap()`, use `?` operator; avoid `as` casts, use
-  `TryFrom`/`TryInto`
-- **Performance**: Trust the compiler, prefer clear code over
-  micro-optimizations
+- **Type safety**: Avoid `unwrap()`, use `?` operator; avoid `as` casts, use `TryFrom`/`TryInto`
+- **Performance**: Trust the compiler, prefer clear code over micro-optimizations
 
 ## Error Handling
 
@@ -125,8 +116,8 @@ ruley uses **both** `thiserror` and `anyhow` for different purposes:
 ### Async Function Patterns
 
 ```rust
-use tokio::time::{timeout, Duration};
 use anyhow::{Context, Result};
+use tokio::time::{Duration, timeout};
 
 async fn generate_rules(codebase: &str) -> Result<GeneratedRules> {
     let provider = get_llm_provider()?;
@@ -168,18 +159,15 @@ ruley uses hierarchical configuration with multiple sources:
 
 1. **Command-line flags** (highest precedence) - parsed by clap
 2. **Environment variables** - automatically read by clap via `env` attribute
-3. **Configuration file** (`ruley.toml` in project root or `--config` path) -
-   loaded and merged
-4. **Embedded defaults** (lowest precedence) - set via clap `default_value` or
-   `Default` trait
+3. **Configuration file** (`ruley.toml` in project root or `--config` path) - loaded and merged
+4. **Embedded defaults** (lowest precedence) - set via clap `default_value` or `Default` trait
 
 ### Clap Integration
 
 - Use `#[arg(env = "RULEY_*")]` to automatically read from environment variables
 - Use `value_parser` for validation instead of manual checks
 - Load config file first, then parse clap args (clap args override config file)
-- Use `ArgAction::Count` for verbosity flags, `ArgAction::SetTrue` for boolean
-  flags
+- Use `ArgAction::Count` for verbosity flags, `ArgAction::SetTrue` for boolean flags
 
 ### Configuration Structure
 
@@ -251,8 +239,7 @@ pub struct Cli {
 
 ### Output Formatting
 
-- Support multiple output formats: Cursor (.mdc), Claude (CLAUDE.md), Copilot,
-  Windsurf, Aider, Generic, JSON
+- Support multiple output formats: Cursor (.mdc), Claude (CLAUDE.md), Copilot, Windsurf, Aider, Generic, JSON
 - Use `--format` flag with comma-separated values or `all` for all formats
 - Respect `NO_COLOR` and `TERM=dumb` for color handling
 - Provide clear error messages with actionable suggestions
@@ -268,28 +255,22 @@ pub struct Cli {
 
 ### Testing Philosophy
 
-Follow the **test proportionality principle**: Keep only tests for critical
-functionality and real edge cases. Test code should be shorter than
-implementation.
+Follow the **test proportionality principle**: Keep only tests for critical functionality and real edge cases. Test code should be shorter than implementation.
 
 **Key Principles:**
 
 - Test critical functionality and real edge cases only
-- Delete tests for trivial operations, framework behavior, or hypothetical
-  scenarios
-- For small projects: aim for <10 meaningful tests per feature
+- Delete tests for trivial operations, framework behavior, or hypothetical scenarios
+- For small projects: aim for \<10 meaningful tests per feature
 - Test code should be shorter than implementation
 
 ### Testing Architecture
 
 1. **Unit Tests**: Algorithms and core logic only, minimal scope
 2. **Integration Tests**: Primary testing approach with minimal mocking
-3. **Snapshot Testing**: insta for CLI outputs and generated rules (only for
-   critical outputs)
-4. **Property Testing**: proptest for generative testing of edge cases (only
-   when needed)
-5. **Performance Testing**: Criterion benchmarks for token counting and
-   compression (only critical paths)
+3. **Snapshot Testing**: insta for CLI outputs and generated rules (only for critical outputs)
+4. **Property Testing**: proptest for generative testing of edge cases (only when needed)
+5. **Performance Testing**: Criterion benchmarks for token counting and compression (only critical paths)
 
 ### Test Organization
 
@@ -319,11 +300,11 @@ implementation.
 
 ### Performance Targets
 
-- **CPU Usage**: <5% sustained during continuous monitoring
-- **Memory Usage**: <100MB resident under normal operation
-- **Process Enumeration**: <5s for 10,000+ processes
+- **CPU Usage**: \<5% sustained during continuous monitoring
+- **Memory Usage**: \<100MB resident under normal operation
+- **Process Enumeration**: \<5s for 10,000+ processes
 - **Database Operations**: >1,000 records/sec write rate
-- **Alert Latency**: <100ms per detection rule execution
+- **Alert Latency**: \<100ms per detection rule execution
 
 ### Async Design
 
@@ -350,13 +331,10 @@ implementation.
 
 ### Core Security Requirements
 
-- **Principle of Least Privilege**: Components run with minimal required
-  permissions
-- **Credential Management**: No hardcoded credentials, prefer environment
-  variables
+- **Principle of Least Privilege**: Components run with minimal required permissions
+- **Credential Management**: No hardcoded credentials, prefer environment variables
 - **Input Validation**: Comprehensive validation with detailed error messages
-- **Attack Surface Minimization**: No network listening, outbound-only
-  connections
+- **Attack Surface Minimization**: No network listening, outbound-only connections
 
 ### Code Safety
 
@@ -404,14 +382,11 @@ Key dependencies:
 
 ### Feature Flags
 
-- **LLM providers** (feature-gated): `anthropic`, `openai`, `ollama`,
-  `openrouter`, `xai`, `groq`, `gemini`
-- **Compression languages** (feature-gated): `compression-typescript`,
-  `compression-python`, `compression-rust`, `compression-go`
+- **LLM providers** (feature-gated): `anthropic`, `openai`, `ollama`, `openrouter`, `xai`, `groq`, `gemini`
+- **Compression languages** (feature-gated): `compression-typescript`, `compression-python`, `compression-rust`, `compression-go`
 - **Default features**: `["anthropic", "openai", "compression-typescript"]`
 - **All providers**: `all-providers` feature enables all LLM provider features
-- **All compression**: `compression-all` feature enables all compression
-  language features
+- **All compression**: `compression-all` feature enables all compression language features
 
 ## Documentation
 
@@ -441,8 +416,7 @@ Key dependencies:
 - Use comprehensive rustdoc comments for all public interfaces
 - Include error conditions and return values
 - Provide usage examples for complex APIs (LLM providers, formatters)
-- Document performance characteristics where relevant (token counting,
-  compression)
+- Document performance characteristics where relevant (token counting, compression)
 
 ## GitHub Actions (CI/CD)
 
@@ -450,8 +424,7 @@ Key dependencies:
 
 - Use clear, descriptive workflow names
 - Organize workflows by purpose (build, test, deploy, security)
-- Use consistent naming conventions (e.g., `build-and-test.yml`,
-  `deploy-prod.yml`)
+- Use consistent naming conventions (e.g., `build-and-test.yml`, `deploy-prod.yml`)
 - Keep workflows focused and modular
 
 ### Triggers and Concurrency
@@ -508,8 +481,7 @@ When creating the justfile, include these standard commands:
 
 ### Shell Configuration
 
-- Use `set shell := ["bash", "-eu", "-o", "pipefail", "-c"]` for strict error
-  handling
+- Use `set shell := ["bash", "-eu", "-o", "pipefail", "-c"]` for strict error handling
 - Ensure all commands fail fast on errors
 - Use proper argument passing with `{{ args }}`
 
@@ -517,14 +489,9 @@ When creating the justfile, include these standard commands:
 
 1. **Zero warnings policy**: All code must pass `cargo clippy -- -D warnings`
 2. **No unsafe code**: `unsafe_code = "forbid"` enforced at package level
-3. **Error handling**: Use `thiserror` for public APIs, `anyhow` for internal
-   code
+3. **Error handling**: Use `thiserror` for public APIs, `anyhow` for internal code
 4. **Async-first**: Use Tokio runtime for all I/O operations
-5. **Test proportionality**: Test only critical functionality and real edge
-   cases
-6. **Security first**: No hardcoded credentials, validate all inputs, minimal
-   privileges
-7. **Performance conscious**: Use bounded concurrency, efficient data
-   structures, proper resource management
-8. **Documentation**: Document all public APIs, keep README current, provide
-   examples
+5. **Test proportionality**: Test only critical functionality and real edge cases
+6. **Security first**: No hardcoded credentials, validate all inputs, minimal privileges
+7. **Performance conscious**: Use bounded concurrency, efficient data structures, proper resource management
+8. **Documentation**: Document all public APIs, keep README current, provide examples

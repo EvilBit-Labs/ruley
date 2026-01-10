@@ -85,8 +85,11 @@ run-release args='':
 # CI
 # ==============================================================================
 
-# Run full CI check (lint + test + build)
-ci-check: lint test build
+# Run full pre-commit CI check (lint + test + build)
+ci-check: check test build
+
+# Run Github Actions CI check
+github-ci-check: lint build test
 
 # Generate changelog from git history
 changelog:

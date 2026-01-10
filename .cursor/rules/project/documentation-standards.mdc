@@ -1,0 +1,46 @@
+---
+globs: *.md,*.rs
+---
+
+# Documentation Standards for ruley
+
+## Code Documentation
+
+- Document all public APIs with rustdoc comments
+- Use `///` for public items and `//!` for module-level documentation
+- Include examples in documentation where appropriate
+- Follow standard rustdoc conventions
+
+## README and Project Documentation
+
+- Keep [README.md](mdc:README.md) up to date with current project status
+- Include clear installation and usage instructions
+- Document the CLI interface and usage examples
+- Provide examples of common use cases
+
+## Configuration Documentation
+
+- Document all configuration options in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md)
+- Include examples of `ruley.toml` configuration files
+- Explain the hierarchical configuration precedence
+- Document environment variables and their purposes (API keys, etc.)
+
+## API Documentation
+
+- Use comprehensive rustdoc comments for all public interfaces
+- Include error conditions and return values
+- Provide usage examples for complex APIs (LLM providers, formatters)
+- Document performance characteristics where relevant (token counting, compression)
+
+## Output Format Documentation
+
+- Document each output format (Cursor, Claude, Copilot, etc.) in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md)
+- Include examples of generated output for each format
+- Explain format-specific features and limitations
+
+## Development Documentation
+
+- Keep [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md) as the source of truth for project standards
+- Document the development workflow and testing strategy
+- Include implementation phases and roadmap
+- Document LLM provider integration patterns

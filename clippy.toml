@@ -1,0 +1,47 @@
+# Clippy configuration for ruley
+# See: https://doc.rust-lang.org/clippy/configuration.html
+
+# Maximum cognitive complexity before triggering a warning
+cognitive-complexity-threshold = 25
+
+# Maximum number of lines in a function before triggering a warning
+too-many-lines-threshold = 150
+
+# Maximum number of arguments a function can have
+too-many-arguments-threshold = 7
+
+# Types that are allowed to be used in async functions
+allowed-idents-below-min-chars = [
+    "x",
+    "y",
+    "z",
+    "i",
+    "j",
+    "k",
+    "n",
+    "id",
+    "tx",
+    "rx",
+]
+
+# Minimum identifier length before triggering a warning
+min-ident-chars-threshold = 2
+
+# Enable msrv checking based on rust-version in Cargo.toml
+msrv = "1.89"
+
+# Avoid warning about doc comments on private items
+# (we document internal APIs for maintainability)
+missing-docs-in-crate-items = false
+
+# Maximum number of struct fields
+max-struct-bools = 3
+
+# Threshold for large enum variant size
+enum-variant-size-threshold = 200
+
+# Threshold for large future size
+future-size-threshold = 16384
+
+# Allow commonly used type complexity
+type-complexity-threshold = 250

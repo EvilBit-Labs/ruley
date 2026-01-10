@@ -69,6 +69,14 @@ test:
 test-verbose:
     cargo test -- --nocapture
 
+# Run benchmarks
+bench:
+    cargo bench
+
+# Run specific benchmark
+bench-name name:
+    cargo bench -- {{ name }}
+
 # ==============================================================================
 # Running
 # ==============================================================================

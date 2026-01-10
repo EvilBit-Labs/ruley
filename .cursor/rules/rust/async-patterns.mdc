@@ -1,0 +1,336 @@
+---
+globs: **/*.rs
+alwaysApply: false
+---
+
+# Async Patterns for ruley
+
+## Async Architecture
+
+ruley is built with async-first design using Tokio runtime:
+
+- **Async Runtime**: Use Tokio for all I/O and task management
+- **Concurrency**: Prefer channels and ownership transfer over shared mutable state
+- **Error Handling**: Use `?` operator and proper error propagation in async contexts
+- **Resource Management**: Implement proper cleanup and graceful shutdown
+
+## Async Function Patterns
+
+Implement async functions with proper error handling:
+
+```rust
+use tokio::time::{timeout, Duration};
+use anyhow::{Context, Result};
+
+async fn generate_rules(codebase: &str) -> Result<GeneratedRules> {
+    let provider = get_llm_provider()?;
+    let messages = build_prompt_messages(codebase)?;
+
+    let response = provider
+        .complete(&messages, &CompletionOptions::default())
+        .await
+        .context("Failed to generate rules")?;
+
+    parse_rules_from_response(&response)
+}
+
+async fn generate_rules_with_timeout(codebase: &str) -> Result<GeneratedRules> {
+    timeout(Duration::from_secs(60), generate_rules(codebase))
+        .await
+        .context("Rule generation timed out")?
+}
+```
+
+## Channel Patterns
+
+Use channels for communication between async tasks:
+
+```rust
+use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc::{Sender, Receiver};
+
+// Bounded channels for backpressure
+async fn process_codebase_chunks(chunks: Vec<CodebaseChunk>) -> Result<Vec<GeneratedRules>> {
+    let (tx, mut rx) = mpsc::channel::<GeneratedRules>(100);
+
+    // Spawn generation tasks for each chunk
+    let generation_handles: Vec<_> = chunks
+        .into_iter()
+        .map(|chunk| {
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                let rules = generate_rules_for_chunk(&chunk).await?;
+                tx.send(rules).await?;
+                Ok::<_, RuleyError>(())
+            })
+        })
+        .collect();
+
+    // Collect results
+    let mut results = Vec::new();
+    drop(tx); // Close sender so receiver knows when done
+
+    while let Some(rules) = rx.recv().await {
+        results.push(rules);
+    }
+
+    // Wait for all tasks to complete
+    for handle in generation_handles {
+        handle.await??;
+    }
+
+    Ok(results)
+}
+```
+
+## Graceful Shutdown
+
+Implement graceful shutdown patterns:
+
+```rust
+use tokio::sync::Notify;
+use std::sync::Arc;
+
+pub struct RuleGenerator {
+    shutdown_notify: Arc<Notify>,
+    shutdown_tx: Option<oneshot::Sender<()>>,
+    provider: Arc<dyn LLMProvider>,
+}
+
+impl RuleGenerator {
+    pub fn new(provider: Arc<dyn LLMProvider>) -> Self {
+        Self {
+            shutdown_notify: Arc::new(Notify::new()),
+            shutdown_tx: None,
+            provider,
+        }
+    }
+
+    pub async fn run(&mut self, codebase: &str) -> Result<GeneratedRules> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        self.shutdown_tx = Some(shutdown_tx);
+
+        // Start generation task
+        let generation_handle = tokio::spawn({
+            let provider = Arc::clone(&self.provider);
+            let codebase = codebase.to_string();
+            async move {
+                generate_rules_with_provider(&provider, &codebase).await
+            }
+        });
+
+        // Wait for shutdown signal or completion
+        tokio::select! {
+            result = generation_handle => {
+                result?
+            }
+            _ = shutdown_rx => {
+                tracing::info!("Shutdown signal received");
+                self.shutdown_notify.notify_waiters();
+                Err(RuleyError::Config("Generation cancelled".to_string()))
+            }
+            _ = tokio::signal::ctrl_c() => {
+                tracing::info!("Ctrl+C received, initiating shutdown");
+                self.shutdown_notify.notify_waiters();
+                Err(RuleyError::Config("Generation cancelled".to_string()))
+            }
+        }
+    }
+
+    pub fn shutdown(&self) {
+        if let Some(tx) = &self.shutdown_tx {
+            let _ = tx.send(());
+        }
+    }
+}
+```
+
+## Concurrent Processing
+
+Use bounded concurrency for resource management:
+
+```rust
+use tokio::sync::Semaphore;
+use std::sync::Arc;
+
+async fn process_chunks_concurrently(chunks: Vec<CodebaseChunk>) -> Result<Vec<GeneratedRules>> {
+    let semaphore = Arc::new(Semaphore::new(5)); // Max 5 concurrent LLM calls
+    let mut handles = Vec::new();
+
+    for chunk in chunks {
+        let semaphore = semaphore.clone();
+        let provider = get_llm_provider()?;
+        let handle = tokio::spawn(async move {
+            let _permit = semaphore.acquire().await?;
+            generate_rules_for_chunk(&chunk, &provider).await
+        });
+        handles.push(handle);
+    }
+
+    let mut results = Vec::new();
+    for handle in handles {
+        let result = handle.await??;
+        results.push(result);
+    }
+
+    Ok(results)
+}
+```
+
+## Async Testing
+
+Write comprehensive async tests:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio_test;
+
+    #[tokio::test]
+    async fn test_rule_generation() {
+        let codebase = "fn main() { println!(\"Hello\"); }";
+        let rules = generate_rules(codebase).await.unwrap();
+        assert!(!rules.conventions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_generation_timeout() {
+        let codebase = "fn main() { println!(\"Hello\"); }";
+        let result = timeout(Duration::from_millis(100), generate_rules(codebase)).await;
+        // May timeout or succeed depending on provider speed
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_chunk_processing() {
+        let chunks = vec![
+            CodebaseChunk::new("chunk1", "fn a() {}"),
+            CodebaseChunk::new("chunk2", "fn b() {}"),
+            CodebaseChunk::new("chunk3", "fn c() {}"),
+        ];
+
+        let results = process_chunks_concurrently(chunks).await.unwrap();
+        assert_eq!(results.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_graceful_shutdown() {
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+
+        let provider = create_test_provider();
+        let generator = Arc::new(Mutex::new(RuleGenerator::new(provider)));
+
+        // Start generation in background
+        let generator_clone = Arc::clone(&generator);
+        let handle = tokio::spawn(async move {
+            let mut generator = generator_clone.lock().await;
+            generator.run("test codebase").await
+        });
+
+        // Wait a bit then shutdown
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        {
+            let generator = generator.lock().await;
+            generator.shutdown();
+        }
+
+        // Should handle shutdown gracefully
+        let _ = handle.await;
+    }
+}
+```
+
+## Error Handling in Async Contexts
+
+Handle errors properly in async code:
+
+```rust
+use anyhow::{Context, Result};
+use tokio::time::{timeout, Duration};
+
+async fn resilient_llm_call(provider: &dyn LLMProvider, messages: &[Message]) -> Result<CompletionResponse> {
+    let mut retries = 3;
+    let mut delay = Duration::from_millis(1000);
+    let max_delay = Duration::from_secs(60);
+
+    loop {
+        match provider.complete(messages, &CompletionOptions::default()).await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                // Check if error is retryable
+                if !is_retryable_error(&e) || retries == 0 {
+                    return Err(e).context("LLM call failed after all retries");
+                }
+
+                tracing::warn!("LLM call failed, retrying in {:?}: {}", delay, e);
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(max_delay); // Exponential backoff with max
+                retries -= 1;
+            }
+        }
+    }
+}
+```
+
+## Resource Cleanup
+
+Implement proper resource cleanup:
+
+```rust
+use tokio::sync::Mutex;
+use std::sync::Arc;
+
+struct ResourceManager {
+    resources: Arc<Mutex<Vec<Resource>>>,
+}
+
+impl ResourceManager {
+    async fn add_resource(&self, resource: Resource) {
+        let mut resources = self.resources.lock().await;
+        resources.push(resource);
+    }
+
+    async fn cleanup_all(&self) {
+        let mut resources = self.resources.lock().await;
+        for resource in resources.drain(..) {
+            resource.cleanup().await;
+        }
+    }
+}
+
+impl Drop for ResourceManager {
+    fn drop(&mut self) {
+        // Note: Cannot use async in Drop, so cleanup must be done elsewhere
+        // Use shutdown signals or explicit cleanup methods
+    }
+}
+```
+
+## Async Streams
+
+Use async streams for continuous data processing:
+
+```rust
+use tokio_stream::{StreamExt, Stream};
+use futures::stream;
+
+async fn process_chunk_stream(mut stream: impl Stream<Item = CodebaseChunk> + Unpin) -> Result<Vec<GeneratedRules>> {
+    let mut results = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        match generate_rules_for_chunk(&chunk).await {
+            Ok(rules) => {
+                tracing::debug!("Chunk processed successfully");
+                results.push(rules);
+            }
+            Err(e) => tracing::error!("Failed to process chunk: {}", e),
+        }
+    }
+    Ok(results)
+}
+
+async fn create_chunk_stream(chunks: Vec<CodebaseChunk>) -> impl Stream<Item = CodebaseChunk> {
+    stream::iter(chunks)
+}
+```

@@ -1,0 +1,217 @@
+---
+globs: **/*.rs
+---
+
+# Error Handling Standards for ruley
+
+## Error Library Usage
+
+ruley uses **both** `thiserror` and `anyhow`, but for different purposes:
+
+**Note:** ruley is both a library (crate) and a binary (CLI tool). The
+distinction here is about error handling patterns: public API vs internal
+implementation, not library vs application.
+
+### `thiserror` - Structured Error Types
+
+Use `thiserror` for **structured error types** (`src/utils/error.rs`, public
+error types) where you need to:
+
+- Match on specific error variants
+- Provide structured error information
+- Convert from other error types with `#[from]`
+- Return errors that callers might want to handle differently
+- Expose error types as part of the public API
+
+```rust
+// src/utils/error.rs
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum RuleyError {
+    #[error("Configuration error: {0}")]
+    Config(String),
+
+    #[error("Repository error: {0}")]
+    Repository(#[from] git2::Error),
+
+    #[error("File system error: {0}")]
+    FileSystem(#[from] std::io::Error),
+
+    #[error("LLM provider error: {provider} - {message}")]
+    Provider { provider: String, message: String },
+
+    #[error("Rate limited by {provider}, retry after {retry_after:?}")]
+    RateLimited { provider: String, retry_after: Option<Duration> },
+
+    #[error("Token limit exceeded: {tokens} tokens > {limit} limit")]
+    TokenLimitExceeded { tokens: usize, limit: usize },
+
+    #[error("Compression error for {language}: {message}")]
+    Compression { language: String, message: String },
+
+    #[error("Output format error: {0}")]
+    OutputFormat(String),
+}
+```
+
+**When to use `thiserror`:**
+
+- Core error types (`RuleyError` enum in `src/utils/error.rs`)
+- Public error types that are part of the crate's API
+- Module-level error types that need to be matched on
+- Errors that need structured data (fields, variants)
+- Errors that callers might want to handle programmatically
+
+### `anyhow` - Error Context and Convenience
+
+Use `anyhow` for **convenient error handling** in internal code (`src/main.rs`,
+`src/cli/*.rs`, internal functions) where you:
+
+- Don't need to match on specific error types
+- Want automatic error context chaining with `.context()`
+- Need user-friendly error messages
+- Are writing internal implementation code (not public API)
+
+```rust
+// src/main.rs or src/cli/config.rs
+use anyhow::{Context, Result};
+
+pub fn load_config(path: &Path) -> Result<Config> {
+    let contents = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read config file: {}", path.display()))?;
+
+    let config: Config = toml::from_str(&contents)
+        .context("Failed to parse TOML configuration")?;
+
+    Ok(config)
+}
+
+pub fn generate_rules(codebase: &str) -> Result<GeneratedRules> {
+    let provider = get_llm_provider()
+        .context("Failed to initialize LLM provider")?;
+
+    provider.complete(&messages, &options)
+        .await
+        .context("LLM API call failed")?
+        .parse_rules()
+        .context("Failed to parse generated rules")
+}
+```
+
+**When to use `anyhow`:**
+
+- Internal functions that don't expose error types (`main.rs`, `cli/*.rs`,
+  internal helpers)
+- Functions that don't need to expose structured error types to callers
+- Error context chaining with `.context()` and `.with_context()`
+- Converting from `RuleyError` to `anyhow::Error` for convenience
+- Top-level error handling in `main()` and CLI entry points
+
+### Converting Between Error Types
+
+Convert from `thiserror` types to `anyhow` in internal code:
+
+```rust
+use anyhow::{Context, Result};
+use crate::utils::error::RuleyError;
+
+// In internal code, convert structured errors to anyhow
+pub async fn run() -> Result<()> {
+    let result: std::result::Result<(), RuleyError> = core_function();
+
+    // Convert to anyhow with context
+    result.context("Operation failed")?;
+
+    // Or use map_err for custom messages
+    result.map_err(|e| anyhow::anyhow!("Failed: {}", e))?;
+
+    Ok(())
+}
+
+// Public API functions can return RuleyError directly
+pub fn public_api_function() -> Result<(), RuleyError> {
+    // Return structured error for callers to match on
+    Err(RuleyError::Config("Invalid configuration".to_string()))
+}
+```
+
+### Summary
+
+| Library     | Use In                                                      | Purpose                                            | Example                                                               |
+| ----------- | ----------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------- |
+| `thiserror` | Public error types (`utils/error.rs`), public API functions | Structured error types, error matching             | `RuleyError` enum, public functions returning `Result<T, RuleyError>` |
+| `anyhow`    | Internal code (`main.rs`, `cli/*.rs`, internal helpers)     | Error context, convenience, user-friendly messages | `Result<T>` in internal functions, `main()` entry point               |
+
+## Error Propagation
+
+- Use `?` operator for error propagation
+- In public API functions: return `Result<T, RuleyError>` (thiserror types) for
+  structured errors
+- In internal functions: return `Result<T>` (anyhow::Result) for convenience
+- Convert between error types using `From` implementations or `.context()`
+- Avoid `unwrap()` and `expect()` in production code
+- Use `.context()` or `.with_context()` to add error context in internal code
+- Public API functions should expose `RuleyError` so callers can match on
+  specific error variants
+
+## Retry Strategy
+
+- Implement exponential backoff for rate-limited requests
+- Retry on HTTP 429, 500, 502, 503, 504
+- Do NOT retry on 400, 401, 403, or context length exceeded
+- Use jitter to prevent thundering herd problems
+
+## Security Considerations
+
+- Don't expose API keys or sensitive tokens in error messages
+- Use structured logging for error details
+- Implement proper error boundaries
+
+## Error Recovery
+
+- Implement graceful degradation when possible (e.g., fallback models)
+- Provide clear error messages for user-facing failures
+- Continue processing other chunks when one fails
+
+## Error Testing
+
+- Test all error conditions and recovery paths
+- Test structured error types (thiserror) with pattern matching
+- Test error context messages (anyhow) for user-friendliness
+- Validate error messages and context
+- Test retry logic and backoff behavior
+- Use `assert_cmd` for CLI error testing
+
+### Example Test Patterns
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::error::RuleyError;
+
+    #[test]
+    fn test_structured_error_matching() {
+        let err = RuleyError::TokenLimitExceeded { tokens: 200000, limit: 100000 };
+
+        match err {
+            RuleyError::TokenLimitExceeded { tokens, limit } => {
+                assert_eq!(tokens, 200000);
+                assert_eq!(limit, 100000);
+            }
+            _ => panic!("Wrong error variant"),
+        }
+    }
+
+    #[test]
+    fn test_anyhow_context() {
+        let result: Result<()> = load_config(Path::new("/nonexistent"));
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Failed to read config file"));
+        assert!(err_msg.contains("/nonexistent"));
+    }
+}
+```

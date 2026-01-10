@@ -1,0 +1,115 @@
+---
+globs: tests/**/*.rs,**/*test*.rs
+alwaysApply: false
+---
+
+# Testing Standards for ruley
+
+## Testing Philosophy
+
+Follow the **test proportionality principle**: Keep only tests for critical
+functionality and real edge cases. Test code should be shorter than
+implementation.
+
+**Key Principles:**
+
+- Test critical functionality and real edge cases only
+- Delete tests for trivial operations, framework behavior, or hypothetical
+  scenarios
+- For small projects: aim for <10 meaningful tests per feature
+- Test code should be shorter than implementation
+- Ask: "What's the simplest version that actually works reliably?"
+
+## Testing Architecture
+
+Follow a **focused testing strategy**:
+
+1. **Unit Tests**: Algorithms and core logic only, minimal scope
+2. **Integration Tests**: Primary testing approach with minimal mocking
+3. **Snapshot Testing**: insta for CLI outputs and generated rules (only for
+   critical outputs)
+4. **Property Testing**: proptest for generative testing of edge cases (only
+   when needed)
+5. **Performance Testing**: Criterion benchmarks for token counting and
+   compression (only critical paths)
+
+## Test Organization
+
+- Use standard `cargo test` for test execution
+- Use `#[tokio::test]` for async runtime testing
+- Use `insta` for snapshot testing of CLI outputs and generated rule files
+- Use `assert_cmd` for CLI integration testing
+- Follow the pattern in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md):
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use insta::assert_snapshot;
+
+    #[tokio::test]
+    async fn test_rule_generation() {
+        // Test implementation
+    }
+}
+```
+
+## CLI Testing
+
+- Use `insta` for snapshot testing of critical CLI outputs only
+- Test success and error cases for critical paths only
+- Validate output format for key formats (not every format needs exhaustive
+  testing)
+- Test argument parsing for critical arguments only
+- Test cost estimation (critical for user experience)
+- **Don't test**: Trivial argument combinations, framework behavior, or obvious
+  success cases
+
+## LLM Provider Testing
+
+- Mock LLM providers for unit tests (don't make real API calls)
+- Use `#[ignore]` attribute for integration tests that require API keys
+- Test retry logic and error handling (critical for reliability)
+- Test token counting and chunking logic (critical for correctness)
+- **Don't test**: Every possible provider configuration, trivial API response
+  formats, or framework behavior
+
+## Compression Testing
+
+- Test tree-sitter compression for key languages (not necessarily all)
+- Validate compression ratio targets (~70% token reduction) for representative
+  cases
+- Test that signatures are preserved correctly (critical for functionality)
+- Test error handling for unsupported languages (real edge case)
+- **Don't test**: Every language permutation, trivial compression scenarios, or
+  framework internals
+
+## Output Format Testing
+
+- Test key output formatters (Cursor, Claude) - not necessarily all formats
+- Validate output structure and syntax for critical formats
+- Use snapshot tests for generated rule files (only critical outputs)
+- Test format-specific features (frontmatter, globs) only when they affect
+  correctness
+- **Don't test**: Every format permutation, trivial formatting details, or
+  obvious success cases
+
+## Performance Testing
+
+- Test token counting accuracy (critical for cost estimation)
+- Benchmark compression performance (only if performance is a concern)
+- Validate chunking logic for large codebases (real edge case)
+- Include regression detection in CI (only for critical performance paths)
+- **Don't test**: Micro-benchmarks for trivial operations, hypothetical
+  performance scenarios
+
+## Test Quality Guidelines
+
+- **Test code length**: Test code should be shorter than the implementation it
+  tests
+- **Test count**: Aim for <10 meaningful tests per feature/module
+- **Focus on value**: Each test should catch real bugs or validate critical
+  behavior
+- **Avoid redundancy**: Don't test the same thing multiple ways
+- **Delete obsolete tests**: Remove tests for code that no longer exists or has
+  changed significantly

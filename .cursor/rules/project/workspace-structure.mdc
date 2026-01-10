@@ -1,0 +1,46 @@
+---
+alwaysApply: true
+---
+
+# ruley Project Structure
+
+## Project Architecture
+
+ruley is a **single-crate Rust CLI tool** for generating AI IDE rules from codebases:
+
+**Core Modules:**
+
+1. **cli/**: Command-line interface with clap argument parsing
+2. **packer/**: Repository packing (file discovery, gitignore, git operations, compression)
+3. **llm/**: Multi-provider LLM integration (Anthropic, OpenAI, Ollama, OpenRouter, etc.)
+4. **generator/**: Rule generation logic and prompt templates
+5. **output/**: Multi-format output formatters (Cursor, Claude, Copilot, Windsurf, Aider, etc.)
+6. **utils/**: Shared utilities (error types, progress bars)
+
+## Project Configuration
+
+- **Language**: Rust 2024 Edition
+- **Package**: Single crate `ruley` (not a workspace)
+- **Linting**: Zero warnings policy with `unsafe_code = "forbid"`
+- **License**: Apache-2.0
+
+## Key Files
+
+- [Cargo.toml](mdc:Cargo.toml): Package configuration and dependencies
+- [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md): Comprehensive project specification
+- [rust-toolchain.toml](mdc:rust-toolchain.toml): Rust toolchain specification
+- [README.md](mdc:README.md): Project overview and usage
+
+## Development Workflow
+
+- Use standard `cargo` commands for development
+- Run `cargo clippy -- -D warnings` before committing
+- Use `cargo test` for running all tests
+- Use `cargo build --release` for optimized builds
+
+## Architecture Principles
+
+- Provider-agnostic LLM interface via traits
+- Format-agnostic rule generation (single analysis, multiple outputs)
+- Token-efficient processing with tree-sitter compression
+- Local-first design (works without network for packing)

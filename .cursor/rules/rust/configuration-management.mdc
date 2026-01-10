@@ -1,0 +1,516 @@
+---
+globs: **/config*.rs,**/*config*.rs
+alwaysApply: false
+---
+
+# Configuration Management Standards for ruley
+
+## Configuration Architecture
+
+ruley uses hierarchical configuration with multiple sources as specified in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md), using **idiomatic clap techniques**:
+
+1. **Command-line flags** (highest precedence) - parsed by clap
+2. **Environment variables** - automatically read by clap via `env` attribute
+3. **Configuration file** (`ruley.toml` in project root or `--config` path) - loaded and merged
+4. **Embedded defaults** (lowest precedence) - set via clap `default_value` or `Default` trait
+
+### Clap Integration
+
+- Use `#[arg(env = "RULEY_*")]` to automatically read from environment variables
+- Use `value_parser` for validation instead of manual checks
+- Load config file first, then parse clap args (clap args override config file)
+- Use `ArgAction::Count` for verbosity flags, `ArgAction::SetTrue` for boolean flags
+
+## Configuration Structure
+
+Define configuration using serde with TOML format as specified in [PROJECT_SPEC.md](mdc:PROJECT_SPEC.md):
+
+```rust
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneralConfig {
+    pub provider: String,
+    pub model: Option<String>,
+    pub format: Vec<String>,
+    pub compress: bool,
+    pub chunk_size: usize,
+    pub no_confirm: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutputConfig {
+    pub formats: Vec<String>,
+    #[serde(default)]
+    pub paths: OutputPaths,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OutputPaths {
+    pub cursor: Option<String>,
+    pub claude: Option<String>,
+    pub copilot: Option<String>,
+    pub windsurf: Option<String>,
+    pub aider: Option<String>,
+    pub generic: Option<String>,
+    pub json: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncludeExcludeConfig {
+    #[serde(default)]
+    pub patterns: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderConfig {
+    pub model: Option<String>,
+    pub max_tokens: Option<usize>,
+    pub host: Option<String>, // For Ollama
+    pub fallback_models: Option<Vec<String>>, // For OpenRouter
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    #[serde(default)]
+    pub general: GeneralConfig,
+    #[serde(default)]
+    pub output: OutputConfig,
+    #[serde(default)]
+    pub include: IncludeExcludeConfig,
+    #[serde(default)]
+    pub exclude: IncludeExcludeConfig,
+    #[serde(default)]
+    pub providers: ProviderConfigs,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProviderConfigs {
+    pub anthropic: Option<ProviderConfig>,
+    pub openai: Option<ProviderConfig>,
+    pub ollama: Option<ProviderConfig>,
+    pub openrouter: Option<ProviderConfig>,
+    pub xai: Option<ProviderConfig>,
+    pub groq: Option<ProviderConfig>,
+    pub gemini: Option<ProviderConfig>,
+}
+```
+
+## Configuration Loading with Clap
+
+Use clap's built-in environment variable support and merge with config file. The idiomatic approach:
+
+1. **Load config file first** (if exists)
+2. **Parse clap args** (which automatically reads from environment variables via `env` attribute)
+3. **Merge**: clap args override config file values
+
+### Clap Args with Environment Variable Support
+
+```rust
+use clap::Parser;
+use std::path::PathBuf;
+
+#[derive(Parser, Debug)]
+#[command(name = "ruley")]
+pub struct Args {
+    /// Path to repository
+    #[arg(default_value = ".")]
+    pub path: String,
+
+    /// LLM provider
+    #[arg(short, long, default_value = "anthropic", env = "RULEY_PROVIDER")]
+    pub provider: String,
+
+    /// Model to use
+    #[arg(short, long, env = "RULEY_MODEL")]
+    pub model: Option<String>,
+
+    /// Output format(s), comma-separated
+    #[arg(short, long, default_value = "cursor", env = "RULEY_FORMAT")]
+    pub format: String,
+
+    /// Config file path
+    #[arg(short, long, default_value = "ruley.toml", env = "RULEY_CONFIG")]
+    pub config: String,
+
+    /// Enable tree-sitter compression
+    #[arg(long, env = "RULEY_COMPRESS")]
+    pub compress: bool,
+
+    /// Max tokens per LLM chunk
+    #[arg(long, default_value_t = 100000, env = "RULEY_CHUNK_SIZE")]
+    pub chunk_size: usize,
+
+    /// Skip cost confirmation prompt
+    #[arg(long, env = "RULEY_NO_CONFIRM")]
+    pub no_confirm: bool,
+}
+```
+
+### Configuration Merging
+
+```rust
+use clap::Parser;
+use std::path::Path;
+
+pub fn load_config() -> Result<FinalConfig, ConfigError> {
+    // Step 1: Parse clap args (reads from env vars automatically)
+    let args = Args::parse();
+
+    // Step 2: Load config file if it exists
+    let file_config = if Path::new(&args.config).exists() {
+        Config::load_from_file(&args.config)?
+    } else {
+        Config::default()
+    };
+
+    // Step 3: Merge - clap args override config file
+    let final_config = FinalConfig {
+        provider: args.provider.or(file_config.general.provider).unwrap_or_default(),
+        model: args.model.or(file_config.general.model),
+        format: args.format.or(file_config.general.format).unwrap_or_default(),
+        compress: args.compress || file_config.general.compress.unwrap_or(false),
+        chunk_size: args.chunk_size.max(file_config.general.chunk_size.unwrap_or(100000)),
+        no_confirm: args.no_confirm || file_config.general.no_confirm.unwrap_or(false),
+        // ... other fields
+    };
+
+    final_config.validate()?;
+    Ok(final_config)
+}
+
+impl Config {
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| ConfigError::FileReadError(e.to_string()))?;
+
+        let config: Config = toml::from_str(&contents)
+            .map_err(|e| ConfigError::ParseError(e.to_string()))?;
+
+        Ok(config)
+    }
+}
+```
+
+### Using Clap's Value Parsers
+
+For validation, use clap's `value_parser`:
+
+```rust
+use clap::{Parser, value_parser};
+
+#[derive(Parser)]
+pub struct Args {
+    /// LLM provider
+    #[arg(
+        short,
+        long,
+        default_value = "anthropic",
+        env = "RULEY_PROVIDER",
+        value_parser = ["anthropic", "openai", "ollama", "openrouter", "xai", "groq", "gemini"]
+    )]
+    pub provider: String,
+
+    /// Max tokens per chunk
+    #[arg(
+        long,
+        default_value_t = 100000,
+        env = "RULEY_CHUNK_SIZE",
+        value_parser = value_parser!(usize).range(1..=1_000_000)
+    )]
+    pub chunk_size: usize,
+}
+```
+
+## Configuration Validation
+
+Use clap's `value_parser` for validation instead of manual checks. This provides better error messages and integrates with clap's help system:
+
+```rust
+use clap::{Parser, value_parser};
+
+#[derive(Parser)]
+pub struct Args {
+    /// LLM provider
+    #[arg(
+        short,
+        long,
+        default_value = "anthropic",
+        env = "RULEY_PROVIDER",
+        value_parser = ["anthropic", "openai", "ollama", "openrouter", "xai", "groq", "gemini"]
+    )]
+    pub provider: String,
+
+    /// Max tokens per chunk
+    #[arg(
+        long,
+        default_value_t = 100000,
+        env = "RULEY_CHUNK_SIZE",
+        value_parser = value_parser!(usize).range(1..=1_000_000)
+    )]
+    pub chunk_size: usize,
+
+    /// Output format(s), comma-separated
+    #[arg(
+        short,
+        long,
+        default_value = "cursor",
+        env = "RULEY_FORMAT",
+        value_parser = |s: &str| -> Result<String, String> {
+            let formats: Vec<&str> = s.split(',').collect();
+            let valid = ["cursor", "claude", "copilot", "windsurf", "aider", "generic", "json", "all"];
+            for format in &formats {
+                if !valid.contains(format) {
+                    return Err(format!("Invalid format: {}. Must be one of: {}", format, valid.join(", ")));
+                }
+            }
+            Ok(s.to_string())
+        }
+    )]
+    pub format: String,
+}
+```
+
+For additional validation after merging, implement a `validate()` method:
+
+```rust
+impl FinalConfig {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        // Validate provider-specific configuration
+        if let Some(provider_config) = self.get_provider_config() {
+            if let Some(max_tokens) = provider_config.max_tokens {
+                if max_tokens == 0 || max_tokens > 1_000_000 {
+                    return Err(ConfigError::InvalidMaxTokens(max_tokens));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_provider_config(&self) -> Option<&ProviderConfig> {
+        match self.provider.as_str() {
+            "anthropic" => self.providers.anthropic.as_ref(),
+            "openai" => self.providers.openai.as_ref(),
+            "ollama" => self.providers.ollama.as_ref(),
+            "openrouter" => self.providers.openrouter.as_ref(),
+            "xai" => self.providers.xai.as_ref(),
+            "groq" => self.providers.groq.as_ref(),
+            "gemini" => self.providers.gemini.as_ref(),
+            _ => None,
+        }
+    }
+}
+```
+
+# [derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("Invalid provider: {0}")]
+    InvalidProvider(String),
+
+    #[error("Invalid chunk size: {0} (must be 1-1000000)")]
+    InvalidChunkSize(usize),
+
+    #[error("Invalid format: {0}")]
+    InvalidFormat(String),
+
+    #[error("Invalid max tokens: {0} (must be 1-1000000)")]
+    InvalidMaxTokens(usize),
+
+    #[error("Failed to read config file: {0}")]
+    FileReadError(String),
+
+    #[error("Failed to parse config file: {0}")]
+    ParseError(String),
+}
+
+```
+
+## Environment Variable Mapping
+
+Map environment variables to configuration:
+
+```rust
+// Environment variables:
+// RULEY_PROVIDER=anthropic
+// RULEY_MODEL=claude-sonnet-4-5-20250929
+// RULEY_NO_CONFIRM=true
+// ANTHROPIC_API_KEY=sk-...
+// OPENAI_API_KEY=sk-...
+// OLLAMA_HOST=http://localhost:11434
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            general: GeneralConfig {
+                provider: "anthropic".to_string(),
+                model: None,
+                format: vec!["cursor".to_string()],
+                compress: false,
+                chunk_size: 100_000,
+                no_confirm: false,
+            },
+            output: OutputConfig {
+                formats: vec!["cursor".to_string()],
+                paths: OutputPaths::default(),
+            },
+            include: IncludeExcludeConfig {
+                patterns: vec![],
+            },
+            exclude: IncludeExcludeConfig {
+                patterns: vec![
+                    "**/node_modules/**".to_string(),
+                    "**/target/**".to_string(),
+                    "**/dist/**".to_string(),
+                    "**/.git/**".to_string(),
+                    "**/vendor/**".to_string(),
+                ],
+            },
+            providers: ProviderConfigs::default(),
+        }
+    }
+}
+```
+
+## Configuration Testing
+
+Test configuration loading with clap integration:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use clap::Parser;
+
+    #[test]
+    fn test_default_config() {
+        let config = Config::default();
+        assert_eq!(config.general.provider, Some("anthropic".to_string()));
+        assert_eq!(config.general.chunk_size, Some(100000));
+    }
+
+    #[test]
+    fn test_config_loading_from_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("ruley.toml");
+
+        let toml = r#"
+[general]
+provider = "openai"
+model = "gpt-4o"
+format = ["cursor", "claude"]
+compress = true
+chunk_size = 50000
+no_confirm = true
+"#;
+
+        std::fs::write(&config_path, toml).unwrap();
+
+        let config = Config::load_from_file(&config_path).unwrap();
+        assert_eq!(config.general.provider, Some("openai".to_string()));
+        assert_eq!(config.general.model, Some("gpt-4o".to_string()));
+        assert_eq!(config.general.compress, Some(true));
+    }
+
+    #[test]
+    fn test_clap_env_override() {
+        // Test that clap automatically reads from environment
+        std::env::set_var("RULEY_PROVIDER", "ollama");
+        std::env::set_var("RULEY_MODEL", "llama3.1:70b");
+
+        // Parse args - clap will read from env automatically
+        let args = Args::try_parse_from(&["ruley"]).unwrap();
+        assert_eq!(args.provider, "ollama");
+        assert_eq!(args.model, Some("llama3.1:70b".to_string()));
+
+        // Cleanup
+        std::env::remove_var("RULEY_PROVIDER");
+        std::env::remove_var("RULEY_MODEL");
+    }
+
+    #[test]
+    fn test_config_merge_precedence() {
+        // Config file has provider = "openai"
+        let file_config = Config {
+            general: Some(GeneralConfig {
+                provider: Some("openai".to_string()),
+                model: Some("gpt-4".to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        // CLI args override: provider = "anthropic"
+        let args = Args::try_parse_from(&["ruley", "--provider", "anthropic"]).unwrap();
+
+        // Final config should use CLI value
+        let final_config = merge_config(&file_config, &args).unwrap();
+        assert_eq!(final_config.provider, "anthropic"); // CLI overrides file
+        assert_eq!(final_config.model, Some("gpt-4".to_string())); // File value used
+    }
+
+    #[test]
+    fn test_value_parser_validation() {
+        // Invalid provider should be caught by clap's value_parser
+        let result = Args::try_parse_from(&["ruley", "--provider", "invalid"]);
+        assert!(result.is_err());
+
+        // Invalid chunk_size should be caught by value_parser range
+        let result = Args::try_parse_from(&["ruley", "--chunk-size", "2000000"]);
+        assert!(result.is_err());
+    }
+}
+```
+
+## Configuration Documentation
+
+Document configuration options:
+
+```rust
+/// ruley configuration structure.
+///
+/// Configuration is loaded from multiple sources in order of precedence:
+/// 1. Command-line arguments (highest)
+/// 2. Environment variables (`RULEY_*`, provider API keys)
+/// 3. Configuration file (`ruley.toml` in project root or `--config` path)
+/// 4. Embedded defaults (lowest)
+///
+/// # Example Configuration
+///
+/// ```toml
+/// [general]
+/// provider = "anthropic"
+/// model = "claude-sonnet-4-5-20250929"
+/// format = ["cursor", "claude"]
+/// compress = true
+/// chunk_size = 100000
+/// no_confirm = false
+///
+/// [output]
+/// formats = ["cursor"]
+///
+/// [output.paths]
+/// cursor = ".cursor/rules/{name}.rules.mdc"
+/// claude = "CLAUDE.md"
+///
+/// [include]
+/// patterns = ["**/*.ts", "**/*.tsx", "**/*.rs"]
+///
+/// [exclude]
+/// patterns = ["**/node_modules/**", "**/target/**"]
+///
+/// [providers.anthropic]
+/// model = "claude-sonnet-4-5-20250929"
+/// max_tokens = 8192
+///
+/// [providers.ollama]
+/// host = "http://localhost:11434"
+/// model = "llama3.1:70b"
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    // ... fields
+}
+```

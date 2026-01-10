@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(cargo check:*)",
-      "Bash(just ci-check:*)"
+      "Bash(just ci-check:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo test:*)"
     ]
   }
 }

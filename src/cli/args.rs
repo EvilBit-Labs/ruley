@@ -1,4 +1,4 @@
-use clap::{Parser, ValueEnum};
+use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -11,6 +11,43 @@ pub enum OutputFormat {
     Aider,
     Generic,
     Json,
+}
+
+/// Tracks which CLI arguments were explicitly provided by the user.
+/// Used to determine whether to use CLI defaults or fall back to config file values.
+#[derive(Debug, Clone, Default)]
+pub struct ArgsPresence {
+    /// Whether --provider was explicitly provided
+    pub provider: bool,
+    /// Whether --format was explicitly provided
+    pub format: bool,
+    /// Whether --rule-type was explicitly provided
+    pub rule_type: bool,
+    /// Whether --compress was explicitly provided
+    pub compress: bool,
+    /// Whether --chunk-size was explicitly provided
+    pub chunk_size: bool,
+    /// Whether --no-confirm was explicitly provided
+    pub no_confirm: bool,
+}
+
+impl ArgsPresence {
+    /// Determine which arguments were explicitly provided from clap's ArgMatches.
+    pub fn from_matches(matches: &ArgMatches) -> Self {
+        Self {
+            provider: matches.value_source("provider")
+                == Some(clap::parser::ValueSource::CommandLine),
+            format: matches.value_source("format") == Some(clap::parser::ValueSource::CommandLine),
+            rule_type: matches.value_source("rule_type")
+                == Some(clap::parser::ValueSource::CommandLine),
+            compress: matches.value_source("compress")
+                == Some(clap::parser::ValueSource::CommandLine),
+            chunk_size: matches.value_source("chunk_size")
+                == Some(clap::parser::ValueSource::CommandLine),
+            no_confirm: matches.value_source("no_confirm")
+                == Some(clap::parser::ValueSource::CommandLine),
+        }
+    }
 }
 
 /// CLI argument parsing with environment variable support.
@@ -111,6 +148,11 @@ impl OutputFormat {
     }
 }
 
-pub fn parse() -> Args {
-    Args::parse()
+/// Parse CLI arguments and return both the parsed args and presence flags.
+/// The presence flags indicate which arguments were explicitly provided on the command line.
+pub fn parse() -> (Args, ArgsPresence) {
+    let matches = Args::command().get_matches();
+    let presence = ArgsPresence::from_matches(&matches);
+    let args = Args::from_arg_matches(&matches).expect("Failed to parse arguments");
+    (args, presence)
 }

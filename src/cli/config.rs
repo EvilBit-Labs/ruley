@@ -1,7 +1,6 @@
 use crate::cli::args::Args;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -59,7 +58,7 @@ pub struct OllamaConfig {
 }
 
 pub fn load(args: &Args) -> Result<Config> {
-    let config_path = Path::new(&args.config);
+    let config_path = &args.config; // Already PathBuf, no conversion needed
 
     if config_path.exists() {
         let content = std::fs::read_to_string(config_path)?;

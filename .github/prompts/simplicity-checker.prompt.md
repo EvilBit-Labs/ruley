@@ -6,9 +6,7 @@ model: GPT-5.2
 
 # Code Simplification Review
 
-Start by examining the uncommitted changes (or the changes in the current branch
-compared with main branch if there are no uncommitted changes) in the current
-codebase.
+Start by examining the uncommitted changes (or the changes in the current branch compared with main branch if there are no uncommitted changes) in the current codebase.
 
 ## Analysis Steps
 
@@ -29,8 +27,7 @@ codebase.
 ### Test Proportionality
 
 - Keep only tests for critical functionality and real edge cases
-- Delete tests for trivial operations, framework behavior, or hypothetical
-  scenarios
+- Delete tests for trivial operations, framework behavior, or hypothetical scenarios
 - For small projects: aim for \<10 meaningful tests per feature
 - Test code should be shorter than implementation
 
@@ -42,6 +39,4 @@ codebase.
 
 ## Ask yourself: "What's the simplest version that actually works reliably?"
 
-Make the refactoring changes, then summarize what you simplified and why. Always
-finish by running `just ci-check` and ensuring that all checks and tests remain
-green.
+Make the refactoring changes, then summarize what you simplified and why. Always finish by running `just ci-check` and ensuring that all checks and tests remain green.

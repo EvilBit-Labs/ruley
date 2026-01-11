@@ -7,7 +7,7 @@ pub fn create_progress_bar(len: u64) -> ProgressBar {
             .template(
                 "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}",
             )
-            .unwrap()
+            .expect("progress bar template is invalid")
             .progress_chars("#>-"),
     );
     pb

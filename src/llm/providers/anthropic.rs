@@ -15,7 +15,7 @@ impl AnthropicProvider {
 
     pub fn from_env() -> Result<Self, RuleyError> {
         let api_key = std::env::var("ANTHROPIC_API_KEY")
-            .map_err(|_| RuleyError::Config("ANTHROPIC_API_KEY not set".to_string()))?;
+            .map_err(|_| RuleyError::missing_api_key("anthropic"))?;
         Ok(Self::new(api_key, "claude-sonnet-4-5-20250929".to_string()))
     }
 }

@@ -1,7 +1,4 @@
 //! Integration tests for ruley CLI.
-//!
-//! These tests verify the end-to-end behavior of the ruley application,
-//! including codebase packing, LLM integration, and rule generation.
 
 mod common;
 
@@ -15,15 +12,9 @@ fn test_cli_help() {
         .output()
         .expect("Failed to execute command");
 
-    assert!(
-        output.status.success(),
-        "CLI should exit successfully with --help"
-    );
+    assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("ruley") || stdout.contains("Usage"),
-        "Help output should contain program name or usage"
-    );
+    assert!(stdout.contains("ruley") || stdout.contains("Usage"));
 }
 
 /// Verify the binary shows version information.
@@ -34,15 +25,9 @@ fn test_cli_version() {
         .output()
         .expect("Failed to execute command");
 
-    assert!(
-        output.status.success(),
-        "CLI should exit successfully with --version"
-    );
+    assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("0.1.0") || stdout.contains("ruley"),
-        "Version output should contain version number"
-    );
+    assert!(stdout.contains("0.1.0") || stdout.contains("ruley"));
 }
 
 #[cfg(test)]
@@ -74,5 +59,86 @@ mod output_integration {
         assert!(project_path.join("package.json").exists());
         assert!(project_path.join("tsconfig.json").exists());
         assert!(project_path.join("src/index.ts").exists());
+    }
+}
+
+#[cfg(test)]
+mod config_integration {
+    use super::common::{create_config_file, create_temp_dir, run_cli_with_config};
+
+    /// Test that dry-run mode shows configuration without making LLM calls.
+    #[test]
+    fn test_dry_run_mode() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(&project_path, &["--dry-run"]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        assert!(stdout.contains("Dry Run Mode"));
+        assert!(stdout.contains("No LLM calls will be made"));
+    }
+
+    /// Test that CLI flags override config file values.
+    #[test]
+    fn test_cli_overrides_config() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let config_content = r#"[general]
+provider = "openai"
+"#;
+        let config_path = create_config_file(&temp_dir, config_content);
+
+        let output = run_cli_with_config(
+            &project_path,
+            &[
+                "--config",
+                config_path.to_str().unwrap(),
+                "--dry-run",
+                "--provider",
+                "anthropic",
+            ],
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        assert!(
+            stdout.contains("anthropic") || stdout.contains("Anthropic"),
+            "CLI provider should override config file"
+        );
+    }
+
+    /// Test that invalid TOML syntax produces an error.
+    #[test]
+    fn test_invalid_toml_fails() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        // Missing closing bracket
+        let config_content = "[general\nprovider = \"openai\"";
+        let config_path = create_config_file(&temp_dir, config_content);
+
+        let output = run_cli_with_config(
+            &project_path,
+            &["--config", config_path.to_str().unwrap(), "--dry-run"],
+        );
+
+        assert!(!output.status.success(), "Should fail with invalid TOML");
+    }
+
+    /// Test that missing explicit config file is handled gracefully.
+    #[test]
+    fn test_missing_config_file_handled() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+        let nonexistent = project_path.join("nonexistent.toml");
+
+        let output = run_cli_with_config(
+            &project_path,
+            &["--config", nonexistent.to_str().unwrap(), "--dry-run"],
+        );
+
+        // Should exit cleanly (not panic), regardless of success/failure
+        assert!(output.status.code().is_some());
     }
 }

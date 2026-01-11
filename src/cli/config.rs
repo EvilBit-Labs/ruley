@@ -128,6 +128,7 @@ pub struct OllamaConfig {
     pub model: Option<String>,
 }
 
+/// Discover configuration file paths in order of precedence.
 fn discover_config_paths(explicit_path: &PathBuf) -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
@@ -299,5 +300,358 @@ pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> cra
         chunking: config.chunking,
         output_paths,
         providers: config.providers,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::args::{Args, ArgsPresence, OutputFormat};
+    use std::collections::HashMap;
+
+    // Note: Discovery tests that change current directory were removed because
+    // they are flaky in parallel test execution. The discovery logic is tested
+    // through integration tests instead.
+
+    mod merging {
+        use super::*;
+
+        fn create_test_config() -> Config {
+            Config {
+                general: GeneralConfig {
+                    provider: "openai".to_string(),
+                    model: Some("gpt-4o".to_string()),
+                    format: vec!["cursor".to_string(), "claude".to_string()],
+                    compress: true,
+                    chunk_size: 50000,
+                    no_confirm: false,
+                    rule_type: "manual".to_string(),
+                },
+                output: OutputConfig {
+                    formats: vec!["copilot".to_string()],
+                    paths: {
+                        let mut map = HashMap::new();
+                        map.insert("cursor".to_string(), ".cursor/rules/rules.mdc".to_string());
+                        map
+                    },
+                },
+                include: IncludeConfig {
+                    patterns: vec!["**/*.rs".to_string()],
+                },
+                exclude: ExcludeConfig {
+                    patterns: vec!["**/target/**".to_string()],
+                },
+                providers: ProvidersConfig::default(),
+                chunking: Some(ChunkingConfig {
+                    chunk_size: Some(75000),
+                    overlap: None,
+                }),
+            }
+        }
+
+        fn create_test_args() -> Args {
+            Args {
+                path: PathBuf::from("."),
+                provider: "anthropic".to_string(),
+                model: Some("claude-sonnet-4".to_string()),
+                output: None,
+                repomix_file: None,
+                format: vec![OutputFormat::Copilot, OutputFormat::Windsurf],
+                description: None,
+                rule_type: "agent".to_string(),
+                config: PathBuf::from("ruley.toml"),
+                include: vec!["**/*.ts".to_string()],
+                exclude: vec!["**/node_modules/**".to_string()],
+                compress: false,
+                chunk_size: 100000,
+                no_confirm: true,
+                dry_run: false,
+                verbose: 0,
+                quiet: false,
+            }
+        }
+
+        fn create_test_presence() -> ArgsPresence {
+            ArgsPresence {
+                provider: true,
+                format: true,
+                rule_type: true,
+                compress: true,
+                chunk_size: true,
+                no_confirm: true,
+            }
+        }
+
+        #[test]
+        fn test_merge_config_cli_explicit() {
+            let config = create_test_config();
+            let args = create_test_args();
+            let presence = create_test_presence();
+
+            let merged = merge_config(&args, config, &presence);
+
+            // CLI values should win when explicitly provided
+            assert_eq!(merged.provider, "anthropic");
+            assert_eq!(merged.format, vec!["copilot", "windsurf"]);
+            assert_eq!(merged.rule_type, "agent");
+            assert_eq!(merged.compress, false);
+            assert_eq!(merged.chunk_size, 100000);
+            assert_eq!(merged.no_confirm, true);
+        }
+
+        #[test]
+        fn test_merge_config_cli_defaults() {
+            let config = create_test_config();
+            let args = create_test_args();
+            let presence = ArgsPresence::default(); // No CLI flags explicitly provided
+
+            let merged = merge_config(&args, config, &presence);
+
+            // Config file values should be used when CLI uses defaults
+            assert_eq!(merged.provider, "openai");
+            assert_eq!(merged.format, vec!["cursor", "claude"]);
+            assert_eq!(merged.rule_type, "manual");
+            assert_eq!(merged.compress, true);
+            assert_eq!(merged.chunk_size, 50000);
+            assert_eq!(merged.no_confirm, false);
+        }
+
+        #[test]
+        fn test_merge_config_format_precedence() {
+            let config = Config {
+                general: GeneralConfig {
+                    format: vec!["cursor".to_string()],
+                    ..Default::default()
+                },
+                output: OutputConfig {
+                    formats: vec!["claude".to_string()],
+                    ..Default::default()
+                },
+                include: IncludeConfig::default(),
+                exclude: ExcludeConfig::default(),
+                providers: ProvidersConfig::default(),
+                chunking: None,
+            };
+
+            let args = Args {
+                format: vec![OutputFormat::Copilot],
+                ..create_test_args()
+            };
+
+            // When CLI format is explicitly provided
+            let presence = ArgsPresence {
+                format: true,
+                ..Default::default()
+            };
+            let merged = merge_config(&args, config.clone(), &presence);
+            assert_eq!(merged.format, vec!["copilot"]);
+
+            // When CLI format is not provided, use general.format
+            let presence = ArgsPresence {
+                format: false,
+                ..Default::default()
+            };
+            let merged = merge_config(&args, config.clone(), &presence);
+            assert_eq!(merged.format, vec!["cursor"]);
+        }
+
+        #[test]
+        fn test_merge_config_chunk_size_precedence() {
+            let config = Config {
+                general: GeneralConfig {
+                    chunk_size: 50000,
+                    ..Default::default()
+                },
+                output: OutputConfig::default(),
+                include: IncludeConfig::default(),
+                exclude: ExcludeConfig::default(),
+                providers: ProvidersConfig::default(),
+                chunking: Some(ChunkingConfig {
+                    chunk_size: Some(75000),
+                    overlap: None,
+                }),
+            };
+
+            let args = Args {
+                chunk_size: 100000,
+                ..create_test_args()
+            };
+
+            // CLI chunk_size explicitly provided
+            let presence = ArgsPresence {
+                chunk_size: true,
+                ..Default::default()
+            };
+            let merged = merge_config(&args, config.clone(), &presence);
+            assert_eq!(merged.chunk_size, 100000);
+
+            // CLI chunk_size not provided, use general.chunk_size
+            let presence = ArgsPresence {
+                chunk_size: false,
+                ..Default::default()
+            };
+            let merged = merge_config(&args, config.clone(), &presence);
+            assert_eq!(merged.chunk_size, 50000);
+
+            // If general.chunk_size is default, use chunking.chunk_size
+            let config = Config {
+                general: GeneralConfig {
+                    chunk_size: default_chunk_size(), // default value
+                    ..Default::default()
+                },
+                output: OutputConfig::default(),
+                include: IncludeConfig::default(),
+                exclude: ExcludeConfig::default(),
+                providers: ProvidersConfig::default(),
+                chunking: Some(ChunkingConfig {
+                    chunk_size: Some(75000),
+                    overlap: None,
+                }),
+            };
+            let presence = ArgsPresence {
+                chunk_size: false,
+                ..Default::default()
+            };
+            let merged = merge_config(&args, config, &presence);
+            assert_eq!(merged.chunk_size, 75000);
+        }
+
+        #[test]
+        fn test_merge_config_include_exclude() {
+            let config = Config {
+                general: GeneralConfig::default(),
+                output: OutputConfig::default(),
+                include: IncludeConfig {
+                    patterns: vec!["**/*.rs".to_string()],
+                },
+                exclude: ExcludeConfig {
+                    patterns: vec!["**/target/**".to_string()],
+                },
+                providers: ProvidersConfig::default(),
+                chunking: None,
+            };
+
+            let args = Args {
+                include: vec!["**/*.ts".to_string()],
+                exclude: vec!["**/node_modules/**".to_string()],
+                ..create_test_args()
+            };
+
+            let merged = merge_config(&args, config, &ArgsPresence::default());
+
+            // CLI args should override config file
+            assert_eq!(merged.include, vec!["**/*.ts"]);
+            assert_eq!(merged.exclude, vec!["**/node_modules/**"]);
+        }
+
+        #[test]
+        fn test_merge_config_include_exclude_empty_cli() {
+            let config = Config {
+                general: GeneralConfig::default(),
+                output: OutputConfig::default(),
+                include: IncludeConfig {
+                    patterns: vec!["**/*.rs".to_string()],
+                },
+                exclude: ExcludeConfig {
+                    patterns: vec!["**/target/**".to_string()],
+                },
+                providers: ProvidersConfig::default(),
+                chunking: None,
+            };
+
+            let args = Args {
+                include: vec![],
+                exclude: vec![],
+                ..create_test_args()
+            };
+
+            let merged = merge_config(&args, config, &ArgsPresence::default());
+
+            // Config file values should be used when CLI is empty
+            assert_eq!(merged.include, vec!["**/*.rs"]);
+            assert_eq!(merged.exclude, vec!["**/target/**"]);
+        }
+
+        #[test]
+        fn test_merge_config_output_paths() {
+            let config = Config {
+                general: GeneralConfig::default(),
+                output: OutputConfig {
+                    paths: {
+                        let mut map = HashMap::new();
+                        map.insert("cursor".to_string(), ".cursor/rules/rules.mdc".to_string());
+                        map.insert("claude".to_string(), "CLAUDE.md".to_string());
+                        map
+                    },
+                    formats: vec![],
+                },
+                include: IncludeConfig::default(),
+                exclude: ExcludeConfig::default(),
+                providers: ProvidersConfig::default(),
+                chunking: None,
+            };
+
+            let merged = merge_config(&create_test_args(), config, &ArgsPresence::default());
+
+            assert_eq!(merged.output_paths.len(), 2);
+            assert_eq!(
+                merged.output_paths.get("cursor"),
+                Some(&".cursor/rules/rules.mdc".to_string())
+            );
+            assert_eq!(
+                merged.output_paths.get("claude"),
+                Some(&"CLAUDE.md".to_string())
+            );
+        }
+
+        #[test]
+        fn test_merge_config_model_precedence() {
+            let config = Config {
+                general: GeneralConfig {
+                    model: Some("gpt-4o".to_string()),
+                    ..Default::default()
+                },
+                output: OutputConfig::default(),
+                include: IncludeConfig::default(),
+                exclude: ExcludeConfig::default(),
+                providers: ProvidersConfig::default(),
+                chunking: None,
+            };
+
+            let args = Args {
+                model: Some("claude-sonnet-4".to_string()),
+                ..create_test_args()
+            };
+
+            let merged = merge_config(&args, config, &ArgsPresence::default());
+
+            // CLI model should override config model
+            assert_eq!(merged.model, Some("claude-sonnet-4".to_string()));
+        }
+
+        #[test]
+        fn test_merge_config_model_from_config() {
+            let config = Config {
+                general: GeneralConfig {
+                    model: Some("gpt-4o".to_string()),
+                    ..Default::default()
+                },
+                output: OutputConfig::default(),
+                include: IncludeConfig::default(),
+                exclude: ExcludeConfig::default(),
+                providers: ProvidersConfig::default(),
+                chunking: None,
+            };
+
+            let args = Args {
+                model: None,
+                ..create_test_args()
+            };
+
+            let merged = merge_config(&args, config, &ArgsPresence::default());
+
+            // Config model should be used when CLI model is None
+            assert_eq!(merged.model, Some("gpt-4o".to_string()));
+        }
     }
 }

@@ -4,20 +4,11 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// Creates a temporary directory for test fixtures.
-///
-/// # Returns
-///
-/// A `TempDir` that will be automatically cleaned up when dropped.
 pub fn create_temp_dir() -> TempDir {
     tempfile::tempdir().expect("Failed to create temp directory")
 }
 
 /// Creates a mock project structure for testing.
-///
-/// # Arguments
-///
-/// * `dir` - The directory to create the mock project in
-/// * `files` - A slice of (relative_path, content) tuples
 pub fn create_mock_project(dir: &TempDir, files: &[(&str, &str)]) -> PathBuf {
     let root = dir.path().to_path_buf();
 
@@ -108,4 +99,25 @@ pub fn typescript_project_files() -> Vec<(&'static str, &'static str)> {
 "#,
         ),
     ]
+}
+
+/// Creates a temporary ruley.toml config file with specified content.
+pub fn create_config_file(dir: &TempDir, content: &str) -> PathBuf {
+    let config_path = dir.path().join("ruley.toml");
+    std::fs::write(&config_path, content).expect("Failed to write config file");
+    config_path
+}
+
+/// Runs the CLI with specified arguments and captures output.
+pub fn run_cli_with_config(dir: &PathBuf, args: &[&str]) -> std::process::Output {
+    let manifest_dir =
+        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR should be set in tests");
+
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.args(["run", "--"]);
+    cmd.arg(dir);
+    cmd.args(args);
+    cmd.current_dir(&manifest_dir);
+    cmd.envs(std::env::vars());
+    cmd.output().expect("Failed to execute command")
 }

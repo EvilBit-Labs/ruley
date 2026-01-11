@@ -14,7 +14,7 @@ impl OpenRouterProvider {
 
     pub fn from_env() -> Result<Self, RuleyError> {
         let api_key = std::env::var("OPENROUTER_API_KEY")
-            .map_err(|_| RuleyError::Config("OPENROUTER_API_KEY not set".to_string()))?;
+            .map_err(|_| RuleyError::missing_api_key("openrouter"))?;
         Ok(Self::new(
             api_key,
             "anthropic/claude-3.5-sonnet".to_string(),

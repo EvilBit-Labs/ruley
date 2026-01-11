@@ -14,8 +14,8 @@ impl OpenAIProvider {
     }
 
     pub fn from_env() -> Result<Self, RuleyError> {
-        let api_key = std::env::var("OPENAI_API_KEY")
-            .map_err(|_| RuleyError::Config("OPENAI_API_KEY not set".to_string()))?;
+        let api_key =
+            std::env::var("OPENAI_API_KEY").map_err(|_| RuleyError::missing_api_key("openai"))?;
         Ok(Self::new(api_key, "gpt-4o".to_string()))
     }
 }

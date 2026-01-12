@@ -1,7 +1,24 @@
 //! Common test utilities and fixtures for integration tests.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
+
+/// Path to the `ruley` binary built by Cargo for integration tests.
+pub fn ruley_bin() -> PathBuf {
+    if let Some(path) = option_env!("CARGO_BIN_EXE_ruley") {
+        return PathBuf::from(path);
+    }
+
+    // Fallback (best-effort): target/{debug|release}/ruley
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let target_dir = std::env::var("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| manifest_dir.join("target"));
+
+    let exe = if cfg!(windows) { "ruley.exe" } else { "ruley" };
+    target_dir.join("debug").join(exe)
+}
 
 /// Creates a temporary directory for test fixtures.
 pub fn create_temp_dir() -> TempDir {
@@ -113,11 +130,48 @@ pub fn run_cli_with_config(dir: &PathBuf, args: &[&str]) -> std::process::Output
     let manifest_dir =
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR should be set in tests");
 
-    let mut cmd = std::process::Command::new("cargo");
-    cmd.args(["run", "--"]);
+    let mut cmd = std::process::Command::new(ruley_bin());
     cmd.arg(dir);
     cmd.args(args);
     cmd.current_dir(&manifest_dir);
     cmd.envs(std::env::vars());
     cmd.output().expect("Failed to execute command")
+}
+
+/// Parse `--dry-run` output into a `key -> value` map.
+///
+/// The dry-run summary prints lines like:
+/// `Compress:     true`
+/// `Chunk Size:   100000`
+///
+/// This helper extracts those `Key: value` pairs for precise assertions.
+pub fn parse_dry_run_output(stdout: &str) -> HashMap<String, String> {
+    let mut parsed = HashMap::new();
+
+    for line in stdout.lines() {
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
+        }
+
+        let mut value = value.trim().to_string();
+
+        // Normalize common cases for stability in assertions.
+        if let Some(stripped) = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
+            value = stripped.to_string();
+        }
+        if value.eq_ignore_ascii_case("true") {
+            value = "true".to_string();
+        } else if value.eq_ignore_ascii_case("false") {
+            value = "false".to_string();
+        }
+
+        parsed.insert(key.to_string(), value);
+    }
+
+    parsed
 }

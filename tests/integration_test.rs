@@ -7,8 +7,8 @@ use std::process::Command;
 /// Verify the binary can be invoked and shows help.
 #[test]
 fn test_cli_help() {
-    let output = Command::new("cargo")
-        .args(["run", "--", "--help"])
+    let output = Command::new(common::ruley_bin())
+        .args(["--help"])
         .output()
         .expect("Failed to execute command");
 
@@ -20,8 +20,8 @@ fn test_cli_help() {
 /// Verify the binary shows version information.
 #[test]
 fn test_cli_version() {
-    let output = Command::new("cargo")
-        .args(["run", "--", "--version"])
+    let output = Command::new(common::ruley_bin())
+        .args(["--version"])
         .output()
         .expect("Failed to execute command");
 
@@ -64,7 +64,9 @@ mod output_integration {
 
 #[cfg(test)]
 mod config_integration {
-    use super::common::{create_config_file, create_temp_dir, run_cli_with_config};
+    use super::common::{
+        create_config_file, create_temp_dir, parse_dry_run_output, run_cli_with_config,
+    };
 
     /// Test that dry-run mode shows configuration without making LLM calls.
     #[test]
@@ -140,5 +142,77 @@ provider = "openai"
 
         // Should exit cleanly (not panic), regardless of success/failure
         assert!(output.status.code().is_some());
+    }
+
+    #[cfg(test)]
+    mod env_override {
+        use super::*;
+        use std::path::PathBuf;
+
+        /// Test full three-tier precedence: config file → env vars → CLI flags
+        #[test]
+        fn test_three_tier_precedence() {
+            let temp_dir = create_temp_dir();
+            let project_path = PathBuf::from(".");
+
+            // Config baseline
+            let config_content = r#"[general]
+provider = "anthropic"
+compress = false
+chunk_size = 123
+no_confirm = false
+"#;
+            let config_path = create_config_file(&temp_dir, config_content);
+
+            // Env overrides config
+            let old_provider = std::env::var("RULEY_GENERAL_PROVIDER").ok();
+            let old_compress = std::env::var("RULEY_GENERAL_COMPRESS").ok();
+            unsafe {
+                std::env::set_var("RULEY_GENERAL_PROVIDER", "openai");
+                std::env::set_var("RULEY_GENERAL_COMPRESS", "true");
+            }
+
+            // CLI overrides env+config for chunk size
+            let output = run_cli_with_config(
+                &project_path,
+                &[
+                    "--config",
+                    config_path.to_str().unwrap(),
+                    "--dry-run",
+                    "--chunk-size",
+                    "75000",
+                ],
+            );
+
+            // Restore env
+            unsafe {
+                match old_provider {
+                    Some(v) => std::env::set_var("RULEY_GENERAL_PROVIDER", v),
+                    None => std::env::remove_var("RULEY_GENERAL_PROVIDER"),
+                }
+                match old_compress {
+                    Some(v) => std::env::set_var("RULEY_GENERAL_COMPRESS", v),
+                    None => std::env::remove_var("RULEY_GENERAL_COMPRESS"),
+                }
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+
+            if !output.status.success() {
+                eprintln!("CLI exited with code: {:?}", output.status.code());
+                eprintln!("STDOUT:\n{}", stdout);
+                eprintln!("STDERR:\n{}", stderr);
+            }
+            assert!(output.status.success(), "Expected dry-run to succeed");
+
+            let parsed = parse_dry_run_output(&stdout);
+
+            // Env wins over config
+            assert_eq!(parsed.get("Provider").unwrap(), "openai");
+            assert_eq!(parsed.get("Compress").unwrap(), "true");
+            // CLI wins over env/config for chunk size
+            assert_eq!(parsed.get("Chunk Size").unwrap(), "75000");
+        }
     }
 }

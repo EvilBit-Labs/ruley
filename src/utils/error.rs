@@ -4,6 +4,12 @@ use thiserror::Error;
 
 /// Compiled regex patterns for redacting sensitive data.
 /// Using LazyLock for thread-safe one-time initialization.
+///
+/// Note: These patterns are static compile-time constants that are validated by tests.
+/// The expect() calls here are acceptable because:
+/// 1. Patterns are known-valid literals, not runtime input
+/// 2. Tests verify all patterns compile successfully
+/// 3. Any regex error would be caught immediately at first use
 static REDACTION_PATTERNS: LazyLock<[(regex::Regex, &'static str); 4]> = LazyLock::new(|| {
     [
         (
@@ -174,6 +180,20 @@ mod tests {
         assert!(!redacted.contains("sk-1234567890abcdefghij"));
         assert!(!redacted.contains("secret123"));
         assert!(redacted.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_bearer_redaction_variants() {
+        // Case-insensitive bearer token redaction
+        assert!(!redact_sensitive_data("Bearer abc123token").contains("abc123token"));
+        assert!(!redact_sensitive_data("BEARER xyz789secret").contains("xyz789secret"));
+        assert!(!redact_sensitive_data("bearer lowercase123").contains("lowercase123"));
+
+        // Bearer with trailing content
+        let msg = "Authorization: Bearer token123 and more text";
+        let redacted = redact_sensitive_data(msg);
+        assert!(!redacted.contains("token123"));
+        assert!(redacted.contains("more text")); // Non-token content preserved
     }
 
     #[test]

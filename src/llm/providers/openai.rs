@@ -28,7 +28,10 @@ impl LLMProvider for OpenAIProvider {
         _options: &CompletionOptions,
     ) -> Result<CompletionResponse, RuleyError> {
         // TODO: Implement OpenAI API client
-        todo!("OpenAI provider not yet implemented")
+        Err(RuleyError::Provider {
+            provider: "openai".to_string(),
+            message: "OpenAI provider not yet implemented".to_string(),
+        })
     }
 
     fn model(&self) -> &str {

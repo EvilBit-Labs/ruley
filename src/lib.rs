@@ -13,11 +13,12 @@
 //! 8. **Finalizing** - Post-processing and finalization
 //! 9. **Reporting** - Reporting and summary generation
 //! 10. **Cleanup** - Cleanup of temporary files and resources
-//! 11. **Complete** - Pipeline completed successfully
+//!
+//! After all stages complete, the pipeline transitions to the **Complete** terminal state.
 //!
 //! ## Architecture
 //!
-//! The `Context` struct carries state through all pipeline stages, containing:
+//! The `PipelineContext` struct carries state through all pipeline stages, containing:
 //! - `config: MergedConfig` - Final resolved configuration from all sources
 //! - `stage: PipelineStage` - Current pipeline execution stage
 //! - `temp_files: TempFileRefs` - Temporary file tracking for cleanup
@@ -79,7 +80,7 @@ pub struct MergedConfig {
     pub no_confirm: bool,
     /// Dry run mode (show what would be processed)
     pub dry_run: bool,
-    /// Verbosity level (0-3)
+    /// Verbosity level (0 = INFO, 1 = DEBUG, 2+ = TRACE)
     pub verbose: u8,
     /// Quiet mode (suppress all output)
     pub quiet: bool,
@@ -137,15 +138,21 @@ impl TempFileRefs {
         self.files.push(path);
     }
 
-    /// Attempt to delete all tracked temporary files and clear the list
+    /// Attempt to delete all tracked temporary files and clear the list.
+    /// Continues on individual file deletion failures to ensure all files are attempted.
+    /// Returns the last error encountered, if any.
     pub fn clear(&mut self) -> std::io::Result<()> {
+        let mut last_error = None;
         for path in &self.files {
-            if path.exists() {
-                std::fs::remove_file(path)?;
+            if path.exists()
+                && let Err(e) = std::fs::remove_file(path)
+            {
+                tracing::warn!("Failed to delete temp file {}: {}", path.display(), e);
+                last_error = Some(e);
             }
         }
         self.files.clear();
-        Ok(())
+        last_error.map_or(Ok(()), Err)
     }
 }
 
@@ -197,6 +204,12 @@ impl PipelineContext {
     pub fn set_stage(&mut self, stage: PipelineStage) {
         self.stage = stage;
     }
+
+    /// Transition to a new pipeline stage with logging
+    fn transition_to(&mut self, stage: PipelineStage) {
+        self.stage = stage;
+        tracing::info!("Pipeline stage: {:?}", stage);
+    }
 }
 
 pub async fn run(config: MergedConfig) -> Result<()> {
@@ -206,11 +219,13 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         1 => tracing::Level::DEBUG,
         _ => tracing::Level::TRACE,
     };
-    tracing_subscriber::fmt()
+    // Use try_init() to gracefully handle cases where logging is already initialized
+    // (e.g., in tests or when the library is used multiple times)
+    let _ = tracing_subscriber::fmt()
         .with_max_level(level)
         .with_target(false)
         .without_time()
-        .init();
+        .try_init();
 
     // Log version and configuration summary
     tracing::info!("ruley v{} starting", env!("CARGO_PKG_VERSION"));
@@ -227,8 +242,7 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     let mut ctx = PipelineContext::new(config);
 
     // Stage 1: Init (Configuration Validation)
-    ctx.set_stage(PipelineStage::Init);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Init);
+    ctx.transition_to(PipelineStage::Init);
 
     // Validate repository path exists
     if !ctx.config.path.exists() {
@@ -245,54 +259,44 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         return Ok(());
     }
 
-    // Stage 2: Scanning - TODO placeholder
-    ctx.set_stage(PipelineStage::Scanning);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Scanning);
-    // TODO: Implement repository scanning (Ticket 2)
+    // Stage 2: Scanning
+    ctx.transition_to(PipelineStage::Scanning);
+    // TODO: Implement repository scanning
 
-    // Stage 3: Compressing - TODO placeholder
-    ctx.set_stage(PipelineStage::Compressing);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Compressing);
-    // TODO: Implement tree-sitter compression (Ticket 3)
+    // Stage 3: Compressing
+    ctx.transition_to(PipelineStage::Compressing);
+    // TODO: Implement tree-sitter compression
 
-    // Stage 4: Analyzing - TODO placeholder
-    ctx.set_stage(PipelineStage::Analyzing);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Analyzing);
-    // TODO: Implement LLM analysis (Ticket 4)
+    // Stage 4: Analyzing
+    ctx.transition_to(PipelineStage::Analyzing);
+    // TODO: Implement LLM analysis
 
-    // Stage 5: Formatting - TODO placeholder
-    ctx.set_stage(PipelineStage::Formatting);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Formatting);
-    // TODO: Implement output formatting (Ticket 5)
+    // Stage 5: Formatting
+    ctx.transition_to(PipelineStage::Formatting);
+    // TODO: Implement output formatting
 
-    // Stage 6: Writing - TODO placeholder
-    ctx.set_stage(PipelineStage::Writing);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Writing);
-    // TODO: Implement file writing (Ticket 6)
+    // Stage 6: Writing
+    ctx.transition_to(PipelineStage::Writing);
+    // TODO: Implement file writing
 
-    // Stage 7: Validating - TODO placeholder
-    ctx.set_stage(PipelineStage::Validating);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Validating);
-    // TODO: Implement output validation (Ticket 7)
+    // Stage 7: Validating
+    ctx.transition_to(PipelineStage::Validating);
+    // TODO: Implement output validation
 
-    // Stage 8: Finalizing - TODO placeholder
-    ctx.set_stage(PipelineStage::Finalizing);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Finalizing);
-    // TODO: Implement post-processing and finalization (Ticket 8)
+    // Stage 8: Finalizing
+    ctx.transition_to(PipelineStage::Finalizing);
+    // TODO: Implement post-processing and finalization
 
-    // Stage 9: Reporting - TODO placeholder
-    ctx.set_stage(PipelineStage::Reporting);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Reporting);
-    // TODO: Implement reporting and summary generation (Ticket 9)
+    // Stage 9: Reporting
+    ctx.transition_to(PipelineStage::Reporting);
+    // TODO: Implement reporting and summary generation
 
     // Stage 10: Cleanup
-    ctx.set_stage(PipelineStage::Cleanup);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Cleanup);
+    ctx.transition_to(PipelineStage::Cleanup);
     cleanup_temp_files(&mut ctx).context("Failed to cleanup temporary files")?;
 
     // Pipeline Complete
-    ctx.set_stage(PipelineStage::Complete);
-    tracing::info!("Pipeline stage: {:?}", PipelineStage::Complete);
+    ctx.transition_to(PipelineStage::Complete);
     tracing::info!("Pipeline completed successfully");
 
     Ok(())

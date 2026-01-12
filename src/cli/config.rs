@@ -13,10 +13,10 @@
 //! 4. Explicit `--config` path (if provided and exists - overrides all above)
 //!
 //! ## Usage:
-//! ```rust
+//! ```rust,no_run
 //! use ruley::cli::{args, config};
 //!
-//! let (args, presence) = args::parse();
+//! let (args, presence) = args::parse()?;
 //! let file_config = config::load(&args)?;
 //! let merged = config::merge_config(&args, file_config, &presence);
 //! # Ok::<(), Box<dyn std::error::Error>>(())
@@ -37,7 +37,7 @@ pub struct ChunkingConfig {
 }
 
 /// Root configuration structure loaded from config files.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
     pub general: GeneralConfig,
@@ -160,9 +160,13 @@ fn discover_config_paths(explicit_path: &PathBuf) -> Vec<PathBuf> {
 }
 
 fn find_git_root() -> Option<PathBuf> {
-    git2::Repository::discover(".")
-        .ok()
-        .and_then(|repo| repo.workdir().map(|p| p.to_path_buf()))
+    match git2::Repository::discover(".") {
+        Ok(repo) => repo.workdir().map(|p| p.to_path_buf()),
+        Err(e) => {
+            tracing::debug!("Failed to discover git repository: {}", e);
+            None
+        }
+    }
 }
 
 fn get_user_config_path() -> Option<PathBuf> {
@@ -199,94 +203,75 @@ pub fn load(args: &Args) -> Result<Config> {
 /// The `presence` parameter indicates which CLI arguments were explicitly provided
 /// on the command line, allowing us to distinguish between CLI defaults and user intent.
 pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> crate::MergedConfig {
-    // Provider: use CLI if explicitly provided, otherwise fall back to config
+    // Provider: CLI explicit > config (config always has a value due to default)
     let provider = if presence.provider {
         args.provider.clone()
-    } else if !config.general.provider.is_empty() {
-        config.general.provider.clone()
     } else {
-        args.provider.clone() // Fall back to CLI default
+        config.general.provider.clone()
     };
 
-    // Format: use CLI if explicitly provided, otherwise fall back to config
+    // Format: CLI explicit > general.format > output.formats > CLI default
     let format: Vec<String> = if presence.format {
         args.format.iter().map(|f| f.as_str().to_string()).collect()
-    } else if !config.general.format.is_empty() {
-        config.general.format.clone()
-    } else if !config.output.formats.is_empty() {
-        config.output.formats.clone()
     } else {
-        // Fall back to CLI default
-        args.format.iter().map(|f| f.as_str().to_string()).collect()
+        first_non_empty(&[&config.general.format, &config.output.formats])
+            .unwrap_or_else(|| args.format.iter().map(|f| f.as_str().to_string()).collect())
     };
 
-    // Rule type: use CLI if explicitly provided, otherwise fall back to config
+    // Rule type: CLI explicit > config (config always has a value due to default)
     let rule_type = if presence.rule_type {
         args.rule_type.clone()
-    } else if !config.general.rule_type.is_empty() {
-        config.general.rule_type.clone()
     } else {
-        args.rule_type.clone() // Fall back to CLI default
+        config.general.rule_type.clone()
     };
 
-    // Compress: use CLI if explicitly provided, otherwise fall back to config
+    // Compress: CLI explicit > config
     let compress = if presence.compress {
         args.compress
     } else {
         config.general.compress
     };
 
-    // Chunk size: use CLI if explicitly provided, otherwise fall back to config
+    // Chunk size: CLI explicit > general.chunk_size (if non-default) > chunking.chunk_size > CLI default
     let chunk_size = if presence.chunk_size {
         args.chunk_size
     } else if config.general.chunk_size != default_chunk_size() {
         config.general.chunk_size
-    } else if let Some(ref chunking) = config.chunking {
-        chunking.chunk_size.unwrap_or(args.chunk_size)
     } else {
-        args.chunk_size // Fall back to CLI default
+        config
+            .chunking
+            .as_ref()
+            .and_then(|c| c.chunk_size)
+            .unwrap_or(args.chunk_size)
     };
 
-    // No confirm: use CLI if explicitly provided, otherwise fall back to config
+    // No confirm: CLI explicit > config
     let no_confirm = if presence.no_confirm {
         args.no_confirm
     } else {
         config.general.no_confirm
     };
 
-    // Path: always use CLI value (no config file equivalent)
-    let path = args.path.clone();
-
-    // Output: always use CLI value (no config file equivalent)
-    let output = args.output.clone();
-
-    // Repomix file: always use CLI value (no config file equivalent)
-    let repomix_file = args.repomix_file.clone();
-
-    // Merge include patterns: CLI args take precedence, then config file
+    // Include/exclude: CLI non-empty > config
     let include = if args.include.is_empty() {
         config.include.patterns
     } else {
         args.include.clone()
     };
 
-    // Merge exclude patterns: CLI args take precedence, then config file
     let exclude = if args.exclude.is_empty() {
         config.exclude.patterns
     } else {
         args.exclude.clone()
     };
 
-    // Create output_paths HashMap from config.output.paths
-    let output_paths = config.output.paths;
-
     crate::MergedConfig {
         provider,
         model: args.model.clone().or(config.general.model),
         format,
-        output,
-        repomix_file,
-        path,
+        output: args.output.clone(),
+        repomix_file: args.repomix_file.clone(),
+        path: args.path.clone(),
         description: args.description.clone(),
         rule_type,
         include,
@@ -298,9 +283,14 @@ pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> cra
         verbose: args.verbose,
         quiet: args.quiet,
         chunking: config.chunking,
-        output_paths,
+        output_paths: config.output.paths,
         providers: config.providers,
     }
+}
+
+/// Returns the first non-empty vector from the slice, or None if all are empty.
+fn first_non_empty(vecs: &[&Vec<String>]) -> Option<Vec<String>> {
+    vecs.iter().find(|v| !v.is_empty()).map(|v| (*v).clone())
 }
 
 #[cfg(test)]

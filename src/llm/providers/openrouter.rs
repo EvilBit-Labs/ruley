@@ -30,7 +30,10 @@ impl LLMProvider for OpenRouterProvider {
         _options: &CompletionOptions,
     ) -> Result<CompletionResponse, RuleyError> {
         // TODO: Implement OpenRouter API client
-        todo!("OpenRouter provider not yet implemented")
+        Err(RuleyError::Provider {
+            provider: "openrouter".to_string(),
+            message: "OpenRouter provider not yet implemented".to_string(),
+        })
     }
 
     fn model(&self) -> &str {

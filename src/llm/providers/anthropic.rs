@@ -28,7 +28,10 @@ impl LLMProvider for AnthropicProvider {
         _options: &CompletionOptions,
     ) -> Result<CompletionResponse, RuleyError> {
         // TODO: Implement Anthropic API client
-        todo!("Anthropic provider not yet implemented")
+        Err(RuleyError::Provider {
+            provider: "anthropic".to_string(),
+            message: "Anthropic provider not yet implemented".to_string(),
+        })
     }
 
     fn model(&self) -> &str {

@@ -1,15 +1,24 @@
 use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, ValueEnum};
 use std::path::PathBuf;
 
+/// Supported output formats for generated rules.
+/// Each format corresponds to a specific AI IDE tool or configuration style.
 #[derive(Debug, Clone, Copy, ValueEnum)]
 #[value(rename_all = "lowercase")]
 pub enum OutputFormat {
+    /// Cursor IDE rules format (.mdc files)
     Cursor,
+    /// Claude Code format (CLAUDE.md)
     Claude,
+    /// GitHub Copilot format
     Copilot,
+    /// Windsurf IDE format
     Windsurf,
+    /// Aider format
     Aider,
+    /// Generic markdown format
     Generic,
+    /// JSON format for programmatic use
     Json,
 }
 
@@ -35,19 +44,19 @@ impl ArgsPresence {
     /// Determine which arguments were explicitly provided from clap's ArgMatches.
     pub fn from_matches(matches: &ArgMatches) -> Self {
         Self {
-            provider: matches.value_source("provider")
-                == Some(clap::parser::ValueSource::CommandLine),
-            format: matches.value_source("format") == Some(clap::parser::ValueSource::CommandLine),
-            rule_type: matches.value_source("rule_type")
-                == Some(clap::parser::ValueSource::CommandLine),
-            compress: matches.value_source("compress")
-                == Some(clap::parser::ValueSource::CommandLine),
-            chunk_size: matches.value_source("chunk_size")
-                == Some(clap::parser::ValueSource::CommandLine),
-            no_confirm: matches.value_source("no_confirm")
-                == Some(clap::parser::ValueSource::CommandLine),
+            provider: is_from_cli(matches, "provider"),
+            format: is_from_cli(matches, "format"),
+            rule_type: is_from_cli(matches, "rule_type"),
+            compress: is_from_cli(matches, "compress"),
+            chunk_size: is_from_cli(matches, "chunk_size"),
+            no_confirm: is_from_cli(matches, "no_confirm"),
         }
     }
+}
+
+/// Check if an argument was explicitly provided on the command line (not from env or default).
+fn is_from_cli(matches: &ArgMatches, name: &str) -> bool {
+    matches.value_source(name) == Some(clap::parser::ValueSource::CommandLine)
 }
 
 /// CLI argument parsing with environment variable support.
@@ -150,9 +159,12 @@ impl OutputFormat {
 
 /// Parse CLI arguments and return both the parsed args and presence flags.
 /// The presence flags indicate which arguments were explicitly provided on the command line.
-pub fn parse() -> (Args, ArgsPresence) {
+///
+/// # Errors
+/// Returns a clap error if argument parsing fails.
+pub fn parse() -> Result<(Args, ArgsPresence), clap::Error> {
     let matches = Args::command().get_matches();
     let presence = ArgsPresence::from_matches(&matches);
-    let args = Args::from_arg_matches(&matches).expect("Failed to parse arguments");
-    (args, presence)
+    let args = Args::from_arg_matches(&matches)?;
+    Ok((args, presence))
 }

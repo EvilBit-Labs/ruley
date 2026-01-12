@@ -200,13 +200,10 @@ impl PipelineContext {
         }
     }
 
-    /// Update the current pipeline stage
-    pub fn set_stage(&mut self, stage: PipelineStage) {
-        self.stage = stage;
-    }
-
-    /// Transition to a new pipeline stage with logging
-    fn transition_to(&mut self, stage: PipelineStage) {
+    /// Transition to a new pipeline stage with logging.
+    /// This is the recommended way to update the pipeline stage as it
+    /// provides consistent logging for stage transitions.
+    pub fn transition_to(&mut self, stage: PipelineStage) {
         self.stage = stage;
         tracing::info!("Pipeline stage: {:?}", stage);
     }

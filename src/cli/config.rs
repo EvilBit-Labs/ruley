@@ -152,7 +152,8 @@ fn discover_config_paths(explicit_path: &PathBuf) -> Vec<PathBuf> {
     }
 
     // Explicit --config path (highest precedence)
-    if explicit_path != &PathBuf::from("ruley.toml") && explicit_path.exists() {
+    // Add if it exists and isn't already in the paths list
+    if explicit_path.exists() && !paths.contains(explicit_path) {
         paths.push(explicit_path.clone());
     }
 

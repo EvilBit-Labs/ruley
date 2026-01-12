@@ -126,6 +126,9 @@ pub fn create_config_file(dir: &TempDir, content: &str) -> PathBuf {
 }
 
 /// Runs the CLI with specified arguments and captures output.
+///
+/// Uses a controlled set of environment variables to avoid test pollution.
+/// Only passes essential variables (PATH, HOME) and RULEY_* variables.
 pub fn run_cli_with_config(dir: &PathBuf, args: &[&str]) -> std::process::Output {
     let manifest_dir =
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR should be set in tests");
@@ -134,7 +137,20 @@ pub fn run_cli_with_config(dir: &PathBuf, args: &[&str]) -> std::process::Output
     cmd.arg(dir);
     cmd.args(args);
     cmd.current_dir(&manifest_dir);
-    cmd.envs(std::env::vars());
+
+    // Use a controlled environment to avoid test pollution.
+    // Only pass essential system variables and RULEY_* variables.
+    cmd.env_clear();
+    for (key, value) in std::env::vars() {
+        if key == "PATH"
+            || key == "HOME"
+            || key == "CARGO_MANIFEST_DIR"
+            || key.starts_with("RULEY_")
+        {
+            cmd.env(&key, &value);
+        }
+    }
+
     cmd.output().expect("Failed to execute command")
 }
 

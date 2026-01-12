@@ -147,13 +147,12 @@ provider = "openai"
     #[cfg(test)]
     mod env_override {
         use super::*;
-        use std::path::PathBuf;
 
         /// Test full three-tier precedence: config file → env vars → CLI flags
         #[test]
         fn test_three_tier_precedence() {
             let temp_dir = create_temp_dir();
-            let project_path = PathBuf::from(".");
+            let project_path = temp_dir.path().to_path_buf();
 
             // Config baseline
             let config_content = r#"[general]

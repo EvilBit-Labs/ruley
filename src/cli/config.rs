@@ -23,12 +23,12 @@
 //! ```
 
 use crate::cli::args::{Args, ArgsPresence};
-use anyhow::{Context, Result};
+use crate::utils::error::RuleyError;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Configuration for content chunking.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChunkingConfig {
     /// Maximum tokens per chunk
     pub chunk_size: Option<usize>,
@@ -129,33 +129,40 @@ pub struct OllamaConfig {
 }
 
 /// Discover configuration file paths in order of precedence.
-fn discover_config_paths(explicit_path: &PathBuf) -> Vec<PathBuf> {
+fn discover_config_paths(explicit_path: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
+    let mut canonical_paths = Vec::new();
+
+    // Helper to add a path if it doesn't already exist (by canonical path)
+    let mut add_if_unique = |path: PathBuf| {
+        if !path.exists() {
+            return;
+        }
+        // Use canonical path for duplicate detection to handle symlinks and relative paths
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+        if !canonical_paths.contains(&canonical) {
+            canonical_paths.push(canonical);
+            paths.push(path);
+        }
+    };
 
     // User config (lowest precedence)
     if let Some(user_config) = get_user_config_path() {
-        paths.push(user_config);
+        add_if_unique(user_config);
     }
 
     // Git root config
     if let Some(git_root) = find_git_root() {
         let git_config = git_root.join("ruley.toml");
-        if git_config.exists() {
-            paths.push(git_config);
-        }
+        add_if_unique(git_config);
     }
 
     // Current directory config
     let current_dir_config = PathBuf::from("ruley.toml");
-    if current_dir_config.exists() {
-        paths.push(current_dir_config);
-    }
+    add_if_unique(current_dir_config);
 
     // Explicit --config path (highest precedence)
-    // Add if it exists and isn't already in the paths list
-    if explicit_path.exists() && !paths.contains(explicit_path) {
-        paths.push(explicit_path.clone());
-    }
+    add_if_unique(explicit_path.to_path_buf());
 
     paths
 }
@@ -177,7 +184,7 @@ fn get_user_config_path() -> Option<PathBuf> {
 }
 
 /// Load configuration from discovered config files and environment variables.
-pub fn load(args: &Args) -> Result<Config> {
+pub fn load(args: &Args) -> Result<Config, RuleyError> {
     let mut builder = config::Config::builder();
 
     for config_path in discover_config_paths(&args.config) {
@@ -190,11 +197,13 @@ pub fn load(args: &Args) -> Result<Config> {
             .try_parsing(true),
     );
 
-    let settings = builder.build().context("Failed to build configuration")?;
+    let settings = builder
+        .build()
+        .map_err(|e| RuleyError::Config(format!("Failed to build configuration: {e}")))?;
 
     settings
         .try_deserialize()
-        .context("Failed to deserialize configuration")
+        .map_err(|e| RuleyError::Config(format!("Failed to deserialize configuration: {e}")))
 }
 
 /// Merge CLI arguments with loaded configuration to create final merged config.

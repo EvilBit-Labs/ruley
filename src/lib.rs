@@ -138,6 +138,16 @@ impl TempFileRefs {
         self.files.push(path);
     }
 
+    /// Returns the number of tracked temporary files
+    pub fn len(&self) -> usize {
+        self.files.len()
+    }
+
+    /// Returns true if there are no tracked temporary files
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
+
     /// Attempt to delete all tracked temporary files and clear the list.
     /// Continues on individual file deletion failures to ensure all files are attempted.
     /// Returns the last error encountered, if any.
@@ -161,8 +171,8 @@ impl TempFileRefs {
 /// on pipeline execution across all stages.
 #[derive(Debug, Default)]
 pub struct ProgressTracker {
-    /// Placeholder field for future implementation
-    _placeholder: (),
+    /// Reserved field for future implementation (current tick count, etc.)
+    _reserved: (),
 }
 
 impl ProgressTracker {
@@ -301,7 +311,7 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
 /// Cleanup temporary files created during pipeline execution.
 fn cleanup_temp_files(ctx: &mut PipelineContext) -> Result<()> {
-    let file_count = ctx.temp_files.files.len();
+    let file_count = ctx.temp_files.len();
     ctx.temp_files
         .clear()
         .context("Failed to remove temporary files")?;

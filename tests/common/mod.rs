@@ -17,7 +17,12 @@ pub fn ruley_bin() -> PathBuf {
         .unwrap_or_else(|_| manifest_dir.join("target"));
 
     let exe = if cfg!(windows) { "ruley.exe" } else { "ruley" };
-    target_dir.join("debug").join(exe)
+    let subdir = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    target_dir.join(subdir).join(exe)
 }
 
 /// Creates a temporary directory for test fixtures.

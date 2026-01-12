@@ -158,7 +158,9 @@ fn discover_config_paths(explicit_path: &Path) -> Vec<PathBuf> {
     }
 
     // Current directory config
-    let current_dir_config = PathBuf::from("ruley.toml");
+    let current_dir_config = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("ruley.toml");
     add_if_unique(current_dir_config);
 
     // Explicit --config path (highest precedence)
@@ -300,7 +302,13 @@ pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> cra
 
 /// Returns the first non-empty vector from the slice, or None if all are empty.
 fn first_non_empty(vecs: &[&Vec<String>]) -> Option<Vec<String>> {
-    vecs.iter().find(|v| !v.is_empty()).map(|v| (*v).clone())
+    vecs.iter().find_map(|v| {
+        if !v.is_empty() {
+            Some((*v).clone())
+        } else {
+            None
+        }
+    })
 }
 
 #[cfg(test)]

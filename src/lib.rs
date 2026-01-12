@@ -43,6 +43,26 @@ pub mod packer;
 pub mod utils;
 
 use anyhow::{Context, Result};
+
+/// Initialize logging based on verbosity level.
+/// This should be called once at application startup.
+///
+/// # Arguments
+/// * `verbose` - Verbosity level (0 = INFO, 1 = DEBUG, 2+ = TRACE)
+pub fn init_logging(verbose: u8) {
+    let level = match verbose {
+        0 => tracing::Level::INFO,
+        1 => tracing::Level::DEBUG,
+        _ => tracing::Level::TRACE,
+    };
+    // Use try_init() to gracefully handle cases where logging is already initialized
+    // (e.g., in tests or when the library is used multiple times)
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(level)
+        .with_target(false)
+        .without_time()
+        .try_init();
+}
 use cli::config::{ChunkingConfig, ProvidersConfig};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -220,20 +240,6 @@ impl PipelineContext {
 }
 
 pub async fn run(config: MergedConfig) -> Result<()> {
-    // Initialize logging based on verbosity level
-    let level = match config.verbose {
-        0 => tracing::Level::INFO,
-        1 => tracing::Level::DEBUG,
-        _ => tracing::Level::TRACE,
-    };
-    // Use try_init() to gracefully handle cases where logging is already initialized
-    // (e.g., in tests or when the library is used multiple times)
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(level)
-        .with_target(false)
-        .without_time()
-        .try_init();
-
     // Log version and configuration summary
     tracing::info!("ruley v{} starting", env!("CARGO_PKG_VERSION"));
     tracing::debug!(
@@ -262,7 +268,9 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Check for dry-run mode
     if ctx.config.dry_run {
-        display_dry_run_config(&ctx.config);
+        if !ctx.config.quiet {
+            display_dry_run_config(&ctx.config);
+        }
         return Ok(());
     }
 

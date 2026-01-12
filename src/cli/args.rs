@@ -157,6 +157,12 @@ impl OutputFormat {
     }
 }
 
+impl std::fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 /// Parse CLI arguments and return both the parsed args and presence flags.
 /// The presence flags indicate which arguments were explicitly provided on the command line.
 ///

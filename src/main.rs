@@ -23,6 +23,9 @@ async fn run_main() -> Result<()> {
     // Merge configurations: CLI args override config files only when explicitly provided
     let merged_config = cli::config::merge_config(&args, config, &presence);
 
+    // Initialize logging based on verbosity
+    ruley::init_logging(merged_config.verbose);
+
     // Run the pipeline
     run(merged_config).await
 }

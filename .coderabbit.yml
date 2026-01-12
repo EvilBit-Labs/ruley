@@ -258,7 +258,7 @@ reviews:
               - New dependencies are necessary and well-maintained
               - Feature flags are documented and correctly gated
               - Edition is 2024
-              - MSRV is respected (1.89+)
+              - MSRV is respected (1.85+)
               - Dev dependencies are in [dev-dependencies]
               - Optional dependencies use optional = true
 

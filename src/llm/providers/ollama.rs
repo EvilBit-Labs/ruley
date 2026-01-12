@@ -3,6 +3,7 @@ use crate::utils::error::RuleyError;
 use async_trait::async_trait;
 
 pub struct OllamaProvider {
+    #[allow(dead_code)] // Will be used when provider is implemented
     host: String,
     model: String,
 }

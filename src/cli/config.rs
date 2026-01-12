@@ -394,9 +394,9 @@ mod tests {
             assert_eq!(merged.provider, "anthropic");
             assert_eq!(merged.format, vec!["copilot", "windsurf"]);
             assert_eq!(merged.rule_type, "agent");
-            assert_eq!(merged.compress, false);
+            assert!(!merged.compress);
             assert_eq!(merged.chunk_size, 100000);
-            assert_eq!(merged.no_confirm, true);
+            assert!(merged.no_confirm);
         }
 
         #[test]
@@ -411,9 +411,9 @@ mod tests {
             assert_eq!(merged.provider, "openai");
             assert_eq!(merged.format, vec!["cursor", "claude"]);
             assert_eq!(merged.rule_type, "manual");
-            assert_eq!(merged.compress, true);
+            assert!(merged.compress);
             assert_eq!(merged.chunk_size, 50000);
-            assert_eq!(merged.no_confirm, false);
+            assert!(!merged.no_confirm);
         }
 
         #[test]

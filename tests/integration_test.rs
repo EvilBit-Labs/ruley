@@ -148,6 +148,34 @@ provider = "openai"
     mod env_override {
         use super::*;
 
+        /// RAII guard for managing environment variables in tests.
+        /// Automatically restores the original value (or removes the var) when dropped.
+        struct EnvGuard {
+            key: &'static str,
+            original: Option<String>,
+        }
+
+        impl EnvGuard {
+            fn new(key: &'static str, value: &str) -> Self {
+                let original = std::env::var(key).ok();
+                unsafe {
+                    std::env::set_var(key, value);
+                }
+                Self { key, original }
+            }
+        }
+
+        impl Drop for EnvGuard {
+            fn drop(&mut self) {
+                unsafe {
+                    match &self.original {
+                        Some(v) => std::env::set_var(self.key, v),
+                        None => std::env::remove_var(self.key),
+                    }
+                }
+            }
+        }
+
         /// Test full three-tier precedence: config file → env vars → CLI flags
         #[test]
         fn test_three_tier_precedence() {
@@ -164,12 +192,8 @@ no_confirm = false
             let config_path = create_config_file(&temp_dir, config_content);
 
             // Env overrides config
-            let old_provider = std::env::var("RULEY_GENERAL_PROVIDER").ok();
-            let old_compress = std::env::var("RULEY_GENERAL_COMPRESS").ok();
-            unsafe {
-                std::env::set_var("RULEY_GENERAL_PROVIDER", "openai");
-                std::env::set_var("RULEY_GENERAL_COMPRESS", "true");
-            }
+            let _guard_provider = EnvGuard::new("RULEY_GENERAL_PROVIDER", "openai");
+            let _guard_compress = EnvGuard::new("RULEY_GENERAL_COMPRESS", "true");
 
             // CLI overrides env+config for chunk size
             let output = run_cli_with_config(
@@ -182,18 +206,6 @@ no_confirm = false
                     "75000",
                 ],
             );
-
-            // Restore env
-            unsafe {
-                match old_provider {
-                    Some(v) => std::env::set_var("RULEY_GENERAL_PROVIDER", v),
-                    None => std::env::remove_var("RULEY_GENERAL_PROVIDER"),
-                }
-                match old_compress {
-                    Some(v) => std::env::set_var("RULEY_GENERAL_COMPRESS", v),
-                    None => std::env::remove_var("RULEY_GENERAL_COMPRESS"),
-                }
-            }
 
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);

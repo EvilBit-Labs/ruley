@@ -27,7 +27,7 @@ static REDACTION_PATTERNS: LazyLock<[(regex::Regex, &'static str); 4]> = LazyLoc
             "${1}[REDACTED]",
         ),
         (
-            regex::Regex::new(r"(sk-[a-zA-Z0-9]{20,})")
+            regex::Regex::new(r"(sk-[a-zA-Z0-9]{8,})")
                 .expect("sk-key redaction pattern is invalid"),
             "[REDACTED]",
         ),

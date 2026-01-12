@@ -21,7 +21,7 @@ jobs:
             version: ${{ steps.version.outputs.version }}
             prerelease: ${{ steps.version.outputs.prerelease }}
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v4
 
             - name: Extract version info
               id: version
@@ -82,7 +82,7 @@ jobs:
                       archive: zip
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v4
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -148,9 +148,9 @@ jobs:
         name: Generate Changelog
         runs-on: ubuntu-latest
         outputs:
-            changelog: ${{ steps.changelog.outputs.changelog }}
+            changelog: ${{ steps.read.outputs.changelog }}
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
 
@@ -177,7 +177,7 @@ jobs:
         needs: [validate, build, changelog]
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v4
 
             - name: Download all artifacts
               uses: actions/download-artifact@v4
@@ -209,7 +209,7 @@ jobs:
         runs-on: ubuntu-latest
         if: needs.validate.outputs.prerelease == 'false'
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v4
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable

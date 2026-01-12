@@ -1,27 +1,68 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
+# Dependabot configuration for ruley
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "cargo" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Rust dependencies
+  - package-ecosystem: "cargo"
+    directory: "/"
     schedule:
       interval: "weekly"
-  - package-ecosystem: "devcontainers" # See documentation for possible values
-    directory: "/" # Location of package manifests
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps(rust)"
+    labels:
+      - "dependencies"
+      - "rust"
+    groups:
+      # Group minor/patch updates to reduce PR noise
+      rust-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    reviewers:
+      - "UncleSp1d3r"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
       interval: "weekly"
-  - package-ecosystem: "docker" # See documentation for possible values
-    directory: "/" # Location of package manifests
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(actions)"
+    labels:
+      - "dependencies"
+      - "ci"
+    groups:
+      actions-all:
+        patterns:
+          - "*"
+
+  # Dev containers
+  - package-ecosystem: "devcontainers"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore(devcontainer)"
+    labels:
+      - "dependencies"
+      - "devcontainer"
+
+  # Docker (if Dockerfile exists)
+  - package-ecosystem: "docker"
+    directory: "/"
     schedule:
       interval: "weekly"
-  - package-ecosystem: "github-actions" # See documentation for possible values
-    directory: "/" # Location of package manifests
-    schedule:
-      interval: "weekly"
-  - package-ecosystem: "npm" # See documentation for possible values
-    directory: "/" # Location of package manifests
-    schedule:
-      interval: "weekly"
+    commit-message:
+      prefix: "deps(docker)"
+    labels:
+      - "dependencies"
+      - "docker"

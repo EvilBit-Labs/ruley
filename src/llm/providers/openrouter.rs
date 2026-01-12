@@ -3,6 +3,7 @@ use crate::utils::error::RuleyError;
 use async_trait::async_trait;
 
 pub struct OpenRouterProvider {
+    #[allow(dead_code)] // Will be used when provider is implemented
     api_key: String,
     model: String,
 }

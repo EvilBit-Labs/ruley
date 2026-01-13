@@ -1,0 +1,582 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit Configuration for Ruley
+# Schema: https://coderabbit.ai/integrations/schema.v2.json
+# Documentation: https://docs.coderabbit.ai/getting-started/yaml-configuration
+
+# =============================================================================
+# GENERAL SETTINGS
+# =============================================================================
+
+language: "en-US"
+
+tone_instructions: "Be direct and technical. Focus on correctness, performance, and idiomatic Rust patterns."
+
+early_access: true
+enable_free_tier: true
+inheritance: false
+
+# =============================================================================
+# REVIEWS CONFIGURATION
+# =============================================================================
+reviews:
+    profile: "assertive"
+    request_changes_workflow: false
+    high_level_summary: true
+    high_level_summary_instructions: "Focus on architectural impact, API changes, and integration points with LLM providers or output formatters."
+    high_level_summary_in_walkthrough: true
+    review_status: true
+    commit_status: true
+    fail_commit_status: false
+    collapse_walkthrough: true
+    changed_files_summary: true
+    sequence_diagrams: true
+    estimate_code_review_effort: true
+    assess_linked_issues: true
+    related_issues: true
+    related_prs: true
+    suggested_labels: true
+    auto_apply_labels: true
+    suggested_reviewers: true
+    auto_assign_reviewers: true
+    poem: true
+    abort_on_close: true
+    disable_cache: false
+
+    # ---------------------------------------------------------------------------
+    # Path Filters
+    # ---------------------------------------------------------------------------
+    path_filters:
+        - "!**/Cargo.lock"
+        - "!**/*.min.js"
+        - "!**/*.min.css"
+        - "!**/target/**"
+        - "!**/.git/**"
+
+    # ---------------------------------------------------------------------------
+    # Path Instructions - Module-specific review guidelines
+    # ---------------------------------------------------------------------------
+    path_instructions:
+        # -------------------------------------------------------------------------
+        # CLI Module
+        # -------------------------------------------------------------------------
+        - path: "src/cli/args.rs"
+          instructions: |
+              This file defines CLI arguments using clap derive macros. Review for:
+              - Correct use of clap attributes (#[arg], #[command])
+              - Environment variable bindings follow RULEY_* pattern (e.g., env = "RULEY_PROVIDER")
+              - Default values are sensible and match PROJECT_SPEC.md
+              - Help text is clear and actionable
+              - ValueEnum derives for enum types used as arguments
+              - Repeatable arguments use Vec<String> correctly
+              - Short flags don't conflict with each other
+
+        - path: "src/cli/config.rs"
+          instructions: |
+              This file handles hierarchical configuration loading. Review for:
+              - Configuration precedence: CLI flags > Environment variables > Config files
+              - Config file discovery order: ~/.config/ruley/config.toml < git root ruley.toml < ./ruley.toml < --config path
+              - Proper use of the `config` crate for merging sources
+              - Default values via default_*() functions are consistent with PROJECT_SPEC.md
+              - All config structs derive Serialize, Deserialize, Clone, Debug
+              - Error handling uses RuleyError::Config variant with descriptive messages
+              - Platform-specific paths use the `dirs` crate correctly
+
+        # -------------------------------------------------------------------------
+        # LLM Module
+        # -------------------------------------------------------------------------
+        - path: "src/llm/provider.rs"
+          instructions: |
+              This file defines the core LLMProvider trait. Review for:
+              - Trait methods use async_trait correctly
+              - Message, CompletionOptions, and CompletionResponse types are complete
+              - Return types use Result<T, RuleyError>
+              - Streaming support via async iterators if applicable
+              - No blocking operations in async trait methods
+
+        - path: "src/llm/client.rs"
+          instructions: |
+              This file provides a unified LLMClient wrapper. Review for:
+              - Delegating pattern correctly forwards to underlying provider
+              - Provider selection logic handles all supported providers (anthropic, openai, ollama, openrouter, xai, groq, gemini)
+              - Feature gates (#[cfg(feature = "...")]) are applied correctly
+              - Error context is added when delegating calls
+
+        - path: "src/llm/tokenizer.rs"
+          instructions: |
+              This file wraps tiktoken for token counting. Review for:
+              - Support for cl100k_base (GPT-4) and o200k_base (GPT-4o) encodings
+              - Token counting is accurate and tested
+              - Performance considerations for large inputs
+              - Thread-safety if tokenizer is shared
+
+        - path: "src/llm/chunker.rs"
+          instructions: |
+              This file handles token-aware chunking. Review for:
+              - Chunks respect token limits (default 100,000 tokens)
+              - Semantic boundaries are preserved (don't split mid-function)
+              - File grouping logic keeps related files together
+              - Overlap/context window handling for multi-chunk processing
+
+        - path: "src/llm/providers/*.rs"
+          instructions: |
+              These files implement LLMProvider for specific providers. Review for:
+              - Correct API endpoint URLs and authentication headers
+              - Request/response serialization matches provider's API schema
+              - Streaming response handling if supported
+              - Rate limiting: respect Retry-After headers, implement exponential backoff
+              - Error mapping to RuleyError::Provider or RuleyError::RateLimited
+              - Feature gate: #[cfg(feature = "provider-name")]
+              - API key sourced from config, then environment variable
+              - Retry logic: max 3 retries, retry on 429/500-504/timeouts, no retry on 400/401/403
+
+        # -------------------------------------------------------------------------
+        # Packer Module
+        # -------------------------------------------------------------------------
+        - path: "src/packer/walker.rs"
+          instructions: |
+              This file handles file discovery using ripgrep's ignore crate. Review for:
+              - Respects .gitignore, .ignore, and global gitignore
+              - Include/exclude patterns from config are applied correctly
+              - Hidden files handling matches user expectations
+              - Symlink handling is safe (no infinite loops)
+              - Performance for large repositories
+
+        - path: "src/packer/git.rs"
+          instructions: |
+              This file handles git operations using git2. Review for:
+              - Repository detection walks up directory tree correctly
+              - Clone operations handle auth (SSH keys, HTTPS credentials)
+              - Shallow clone support for large repositories
+              - Error handling maps git2::Error to RuleyError::Repository
+              - Cleanup of cloned repos in temp directories
+
+        - path: "src/packer/compress.rs"
+          instructions: |
+              This file defines tree-sitter compression. Review for:
+              - Language enum covers all supported languages (TypeScript, Python, Rust, Go)
+              - Compressor trait is implemented correctly
+              - Feature gates for optional language support (#[cfg(feature = "compression-*")])
+              - Compression preserves semantic meaning (signatures, types, docstrings)
+              - Performance impact is acceptable
+
+        # -------------------------------------------------------------------------
+        # Generator Module
+        # -------------------------------------------------------------------------
+        - path: "src/generator/rules.rs"
+          instructions: |
+              This file defines GeneratedRules data structures. Review for:
+              - Data structures match PROJECT_SPEC.md schema
+              - All fields derive Serialize, Deserialize, Clone, Debug
+              - Optional fields use Option<T>
+              - Default implementations are sensible
+              - Rule types support all output formats
+
+        - path: "src/generator/prompts.rs"
+          instructions: |
+              This file manages LLM prompts. Review for:
+              - Prompt templates are loaded from prompts/ directory
+              - Template variable substitution is safe (no injection)
+              - Token budget is respected
+              - Format-specific prompts extend base prompt correctly
+              - Prompts produce structured, parseable output
+
+        # -------------------------------------------------------------------------
+        # Output Module
+        # -------------------------------------------------------------------------
+        - path: "src/output/mod.rs"
+          instructions: |
+              This file defines the OutputFormatter trait. Review for:
+              - Trait methods cover all formatting needs
+              - Metadata struct captures all required fields
+              - Error handling uses RuleyError::OutputFormat
+
+        - path: "src/output/*.rs"
+          instructions: |
+              These files implement OutputFormatter for specific formats. Review for:
+              - Output matches the format specification in PROJECT_SPEC.md
+              - File paths use correct defaults (.cursor/rules/*.mdc, CLAUDE.md, etc.)
+              - Frontmatter/metadata is correctly formatted
+              - Special characters are escaped properly
+              - Line endings are consistent (LF preferred)
+              - Cursor: uses .mdc extension, proper rule type headers
+              - Claude: CLAUDE.md with markdown formatting
+              - Copilot: .github/copilot-instructions.md
+              - Aider: .aider.conf.yml format
+              - JSON: valid JSON with schema compliance
+
+        # -------------------------------------------------------------------------
+        # Utils Module
+        # -------------------------------------------------------------------------
+        - path: "src/utils/error.rs"
+          instructions: |
+              This file defines RuleyError. Review for:
+              - All error variants use thiserror correctly
+              - #[from] attribute for automatic conversion where appropriate
+              - Error messages are actionable and include context
+              - New error variants are added for new failure modes
+              - Display implementation is human-readable
+
+        - path: "src/utils/progress.rs"
+          instructions: |
+              This file provides progress bar utilities. Review for:
+              - Uses indicatif correctly
+              - Progress bars are cleared on completion
+              - Spinner styles are consistent
+              - Performance: updates aren't too frequent
+
+        # -------------------------------------------------------------------------
+        # Tests
+        # -------------------------------------------------------------------------
+        - path: "tests/**/*.rs"
+          instructions: |
+              Review test files for:
+              - Tests cover happy path and error cases
+              - Tests requiring API keys are marked #[ignore]
+              - Async tests use #[tokio::test]
+              - Test fixtures use tempfile crate
+              - Assertions have descriptive failure messages
+              - No flaky tests (avoid timing-dependent assertions)
+              - Integration tests are in tests/ directory
+              - Unit tests are in #[cfg(test)] mod tests blocks
+
+        - path: "benches/**/*.rs"
+          instructions: |
+              Review benchmark files for:
+              - Uses Criterion framework correctly
+              - Benchmarks measure meaningful operations
+              - Input sizes are realistic
+              - No I/O in hot paths being measured
+              - Results are reproducible
+
+        # -------------------------------------------------------------------------
+        # Configuration & Documentation
+        # -------------------------------------------------------------------------
+        - path: "Cargo.toml"
+          instructions: |
+              Review Cargo.toml changes for:
+              - Version bumps follow semver
+              - New dependencies are necessary and well-maintained
+              - Feature flags are documented and correctly gated
+              - Edition is 2024
+              - MSRV is respected (1.85+)
+              - Dev dependencies are in [dev-dependencies]
+              - Optional dependencies use optional = true
+
+        - path: "*.md"
+          instructions: |
+              Review documentation for:
+              - Accuracy with current implementation
+              - Clear examples that work
+              - Proper markdown formatting
+              - No broken links
+              - Changelog entries for notable changes
+
+        - path: "prompts/*.md"
+          instructions: |
+              Review prompt templates for:
+              - Clear instructions for the LLM
+              - Structured output format specification
+              - Token efficiency (not overly verbose)
+              - Consistency with base prompt
+              - Variable placeholders use consistent syntax
+
+    # ---------------------------------------------------------------------------
+    # Auto Review Settings
+    # ---------------------------------------------------------------------------
+    auto_review:
+        enabled: true
+        auto_incremental_review: true
+        ignore_title_keywords:
+            - "WIP"
+            - "DO NOT REVIEW"
+            - "[skip ci]"
+            - "[skip review]"
+        labels: []
+        drafts: false
+        base_branches: []
+        ignore_usernames:
+            - "dependabot[bot]"
+            - "renovate[bot]"
+
+    # ---------------------------------------------------------------------------
+    # Finishing Touches
+    # ---------------------------------------------------------------------------
+    finishing_touches:
+        docstrings:
+            enabled: true
+        unit_tests:
+            enabled: true
+
+    # ---------------------------------------------------------------------------
+    # Pre-merge Checks
+    # ---------------------------------------------------------------------------
+    pre_merge_checks:
+        docstrings:
+            mode: "warning"
+            threshold: 70
+
+        title:
+            mode: "warning"
+            requirements: |
+                PR titles must follow Conventional Commits format:
+                <type>(<scope>): <description>
+
+                Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+                Scopes: cli, config, packer, llm, generator, output, utils, deps, release
+
+                Examples:
+                - feat(llm): add OpenAI provider implementation
+                - fix(packer): respect nested .gitignore files
+                - docs(readme): add installation instructions
+                - refactor(output): extract common formatting logic
+
+        description:
+            mode: "warning"
+
+        issue_assessment:
+            mode: "warning"
+
+        custom_checks:
+            - mode: "warning"
+              name: "Error Handling"
+              instructions: |
+                  Verify that all error handling follows the project conventions:
+                  1. Use RuleyError variants, never raw strings or generic errors
+                  2. Add context with .context() from anyhow for actionable messages
+                  3. Map external errors (git2, io, reqwest) to appropriate RuleyError variants
+                  4. Rate limiting must use RuleyError::RateLimited with retry_after if available
+                  5. Token limit errors must use RuleyError::TokenLimitExceeded with actual counts
+
+            - mode: "warning"
+              name: "Async Safety"
+              instructions: |
+                  Check for async/await correctness:
+                  1. No blocking operations (std::fs, std::thread::sleep) in async code
+                  2. Use tokio equivalents (tokio::fs, tokio::time::sleep)
+                  3. async_trait is used for trait definitions with async methods
+                  4. Futures are properly awaited, no forgotten .await
+                  5. No unbounded channel/queue growth that could cause memory issues
+
+            - mode: "warning"
+              name: "Feature Gates"
+              instructions: |
+                  Verify feature flag usage:
+                  1. Provider code uses #[cfg(feature = "anthropic")], etc.
+                  2. Compression code uses #[cfg(feature = "compression-rust")], etc.
+                  3. Feature combinations compile correctly
+                  4. Default features are minimal but functional
+                  5. cargo check --all-features passes
+
+            - mode: "warning"
+              name: "Configuration Precedence"
+              instructions: |
+                  Ensure configuration changes respect the precedence hierarchy:
+                  1. CLI arguments (highest priority)
+                  2. Environment variables (RULEY_* pattern)
+                  3. Config files (--config > ./ruley.toml > git root ruley.toml > ~/.config/ruley/config.toml)
+                  4. Hardcoded defaults (lowest priority)
+
+                  New config options must be added to all layers consistently.
+
+    # ---------------------------------------------------------------------------
+    # Labeling Instructions
+    # ---------------------------------------------------------------------------
+    labeling_instructions:
+        - label: "bug"
+          instructions: "Apply when the PR fixes something that isn't working correctly. Look for fixes to existing functionality, error corrections, or regression fixes."
+        - label: "enhancement"
+          instructions: "Apply when the PR adds new features or improves existing functionality. This includes new CLI options, new LLM providers, new output formats, or performance improvements."
+        - label: "documentation"
+          instructions: "Apply when the PR primarily updates documentation files (*.md), code comments, examples, or prompts/*.md files."
+        - label: "help wanted"
+          instructions: "Apply when the PR is incomplete or the author explicitly requests help with implementation."
+        - label: "question"
+          instructions: "Apply when the PR raises questions about implementation approach or needs discussion before proceeding."
+        - label: "duplicate"
+          instructions: "Apply when the PR duplicates work from another open or merged PR."
+        - label: "invalid"
+          instructions: "Apply when the PR doesn't follow project conventions, targets the wrong branch, or is not appropriate for the project."
+
+    # ---------------------------------------------------------------------------
+    # Tools Configuration
+    # ---------------------------------------------------------------------------
+    tools:
+        # Rust-specific tools
+        clippy:
+            enabled: true
+
+        # General tools
+        ast-grep:
+            essential_rules: true
+            rule_dirs: []
+            util_dirs: []
+            packages: []
+
+        shellcheck:
+            enabled: true
+
+        markdownlint:
+            enabled: true
+
+        github-checks:
+            enabled: true
+            timeout_ms: 90000
+
+        languagetool:
+            enabled: true
+            enabled_rules: []
+            disabled_rules: []
+            enabled_categories: []
+            disabled_categories: []
+            enabled_only: false
+
+        gitleaks:
+            enabled: true
+
+        checkov:
+            enabled: true
+
+        semgrep:
+            enabled: true
+
+        actionlint:
+            enabled: true
+
+        yamllint:
+            enabled: true
+
+        # Disable tools not relevant to this project
+        ruff:
+            enabled: false
+        eslint:
+            enabled: false
+        biome:
+            enabled: false
+        phpstan:
+            enabled: false
+        swiftlint:
+            enabled: false
+        rubocop:
+            enabled: false
+        detekt:
+            enabled: false
+        golangci-lint:
+            enabled: false
+
+# =============================================================================
+# CHAT CONFIGURATION
+# =============================================================================
+chat:
+    art: true
+    auto_reply: true
+    integrations:
+        jira:
+            usage: "disabled"
+        linear:
+            usage: "disabled"
+
+# =============================================================================
+# KNOWLEDGE BASE CONFIGURATION
+# =============================================================================
+knowledge_base:
+    opt_out: false
+
+    web_search:
+        enabled: true
+
+    code_guidelines:
+        enabled: true
+        filePatterns:
+            - "PROJECT_SPEC.md"
+            - ".github/commit-instructions.md"
+            - "README.md"
+            - "CLAUDE.md"
+
+    learnings:
+        scope: "local"
+
+    issues:
+        scope: "local"
+
+    pull_requests:
+        scope: "local"
+
+    jira:
+        usage: "disabled"
+        project_keys: []
+
+    linear:
+        usage: "disabled"
+        team_keys: []
+
+    mcp:
+        usage: "disabled"
+        disabled_servers: []
+
+# =============================================================================
+# CODE GENERATION CONFIGURATION
+# =============================================================================
+code_generation:
+    docstrings:
+        language: "en-US"
+        path_instructions:
+            - path: "src/**/*.rs"
+              instructions: |
+                  Generate Rust documentation comments (///) for public items.
+                  Follow these conventions:
+                  - Start with a brief one-line summary
+                  - Add # Examples section with working code when helpful
+                  - Add # Errors section documenting error conditions
+                  - Add # Panics section if the function can panic
+                  - Use backticks for code references
+                  - Reference related items with [links]
+
+    unit_tests:
+        path_instructions:
+            - path: "src/**/*.rs"
+              instructions: |
+                  Generate Rust unit tests following project conventions:
+                  - Place tests in #[cfg(test)] mod tests { } blocks
+                  - Use #[test] for sync tests, #[tokio::test] for async
+                  - Mark tests requiring API keys with #[ignore]
+                  - Use tempfile for filesystem fixtures
+                  - Include both success and error cases
+                  - Use assert_eq! with descriptive messages
+                  - Name tests: test_<function>_<scenario>
+
+# =============================================================================
+# ISSUE ENRICHMENT CONFIGURATION
+# =============================================================================
+issue_enrichment:
+    auto_enrich:
+        enabled: true
+
+    planning:
+        enabled: true
+        auto_planning:
+            enabled: false
+            labels:
+                - "enhancement"
+                - "bug"
+
+    labeling:
+        auto_apply_labels: true
+        labeling_instructions:
+            - label: "bug"
+              instructions: "Apply when the issue reports something that isn't working correctly. Look for error messages, unexpected behavior, crashes, or regressions in existing functionality."
+            - label: "enhancement"
+              instructions: "Apply when the issue requests new features or improvements. This includes new CLI options, new LLM providers, new output formats, performance improvements, or usability enhancements."
+            - label: "documentation"
+              instructions: "Apply when the issue is about missing, incorrect, or unclear documentation. This includes README updates, API documentation, examples, or inline code comments."
+            - label: "good first issue"
+              instructions: "Apply when the issue is well-scoped, has clear requirements, and doesn't require deep knowledge of the codebase. Good for newcomers to contribute."
+            - label: "help wanted"
+              instructions: "Apply when the issue needs community input, additional expertise, or the maintainers explicitly request assistance."
+            - label: "question"
+              instructions: "Apply when the issue is asking for clarification, guidance, or discussion rather than reporting a bug or requesting a feature."
+            - label: "duplicate"
+              instructions: "Apply when this issue duplicates an existing open or recently closed issue. Reference the original issue."
+            - label: "invalid"
+              instructions: "Apply when the issue doesn't provide enough information, is not related to this project, or cannot be reproduced."
+            - label: "wontfix"
+              instructions: "Apply when the issue describes behavior that is working as intended, is out of scope for the project, or conflicts with project goals."

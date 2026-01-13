@@ -14,8 +14,8 @@ impl OpenAIProvider {
     }
 
     pub fn from_env() -> Result<Self, RuleyError> {
-        let api_key = std::env::var("OPENAI_API_KEY")
-            .map_err(|_| RuleyError::Config("OPENAI_API_KEY not set".to_string()))?;
+        let api_key =
+            std::env::var("OPENAI_API_KEY").map_err(|_| RuleyError::missing_api_key("openai"))?;
         Ok(Self::new(api_key, "gpt-4o".to_string()))
     }
 }
@@ -28,7 +28,10 @@ impl LLMProvider for OpenAIProvider {
         _options: &CompletionOptions,
     ) -> Result<CompletionResponse, RuleyError> {
         // TODO: Implement OpenAI API client
-        todo!("OpenAI provider not yet implemented")
+        Err(RuleyError::Provider {
+            provider: "openai".to_string(),
+            message: "OpenAI provider not yet implemented".to_string(),
+        })
     }
 
     fn model(&self) -> &str {

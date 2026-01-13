@@ -3,6 +3,7 @@ use crate::utils::error::RuleyError;
 use async_trait::async_trait;
 
 pub struct OpenRouterProvider {
+    #[allow(dead_code)] // Will be used when provider is implemented
     api_key: String,
     model: String,
 }
@@ -14,7 +15,7 @@ impl OpenRouterProvider {
 
     pub fn from_env() -> Result<Self, RuleyError> {
         let api_key = std::env::var("OPENROUTER_API_KEY")
-            .map_err(|_| RuleyError::Config("OPENROUTER_API_KEY not set".to_string()))?;
+            .map_err(|_| RuleyError::missing_api_key("openrouter"))?;
         Ok(Self::new(
             api_key,
             "anthropic/claude-3.5-sonnet".to_string(),
@@ -30,7 +31,10 @@ impl LLMProvider for OpenRouterProvider {
         _options: &CompletionOptions,
     ) -> Result<CompletionResponse, RuleyError> {
         // TODO: Implement OpenRouter API client
-        todo!("OpenRouter provider not yet implemented")
+        Err(RuleyError::Provider {
+            provider: "openrouter".to_string(),
+            message: "OpenRouter provider not yet implemented".to_string(),
+        })
     }
 
     fn model(&self) -> &str {

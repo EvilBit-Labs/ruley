@@ -114,4 +114,5 @@ impl CompressedCodebase {
     }
 }
 
+pub use compress::{Compressor, TreeSitterCompressor, WhitespaceCompressor, compress_codebase};
 pub use walker::{FileEntry, scan_files};

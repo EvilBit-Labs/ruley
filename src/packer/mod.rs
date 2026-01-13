@@ -2,6 +2,7 @@ pub mod compress;
 pub mod git;
 pub mod gitignore;
 pub mod output;
+pub mod repomix;
 pub mod walker;
 
 use compress::Language;
@@ -115,4 +116,5 @@ impl CompressedCodebase {
 }
 
 pub use compress::{Compressor, TreeSitterCompressor, WhitespaceCompressor, compress_codebase};
+pub use repomix::parse_repomix;
 pub use walker::{FileEntry, scan_files};

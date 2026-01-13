@@ -38,7 +38,7 @@ impl FileEntry {
 }
 
 /// Detect programming language from file extension.
-fn detect_language(path: &Path) -> Option<Language> {
+pub(crate) fn detect_language(path: &Path) -> Option<Language> {
     path.extension()
         .and_then(|ext| ext.to_str())
         .and_then(|ext_str| match ext_str {

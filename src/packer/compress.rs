@@ -1,5 +1,6 @@
 use crate::utils::error::RuleyError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Language {
     TypeScript,
     JavaScript,

@@ -60,7 +60,22 @@ impl TreeSitterCompressor {
         use tree_sitter::Parser;
 
         let mut parser = Parser::new();
-        let is_tsx = source.contains("jsx") || source.contains("React.FC");
+        // Detect JSX by looking for JSX syntax patterns (< followed by identifier)
+        // or React-specific patterns
+        let is_tsx = source.contains("jsx")
+            || source.contains("React.FC")
+            || source.contains("ReactNode")
+            || source.contains("JSX.Element")
+            || (source.contains('<')
+                && source.chars().any(|c| {
+                    c == '<'
+                        && source.split_once('<').is_some_and(|(_, after)| {
+                            after
+                                .chars()
+                                .next()
+                                .is_some_and(|next| next.is_alphabetic())
+                        })
+                }));
         let language = if is_tsx {
             tree_sitter_typescript::LANGUAGE_TSX.into()
         } else {
@@ -81,11 +96,30 @@ impl TreeSitterCompressor {
                 message: "Failed to parse TypeScript source code".to_string(),
             })?;
 
-        let mut result = String::new();
-        let mut cursor = tree.walk();
         let root_node = tree.root_node();
 
+        // If the parsed tree contains syntax errors, signal failure so callers
+        // can fall back to a simpler compression strategy.
+        if root_node.has_error() {
+            return Err(RuleyError::Compression {
+                language: "TypeScript".to_string(),
+                message: "TypeScript source contains syntax errors".to_string(),
+            });
+        }
+
+        let mut result = String::new();
+        let mut cursor = tree.walk();
+
         extract_typescript_nodes(source, root_node, &mut cursor, &mut result);
+
+        // If we couldn't extract any meaningful nodes, treat this as a
+        // compression failure so higher-level callers can fall back.
+        if result.trim().is_empty() {
+            return Err(RuleyError::Compression {
+                language: "TypeScript".to_string(),
+                message: "Failed to extract TypeScript structure for compression".to_string(),
+            });
+        }
 
         Ok(result)
     }
@@ -267,7 +301,7 @@ impl Compressor for TreeSitterCompressor {
 fn extract_typescript_nodes(
     source: &str,
     node: tree_sitter::Node,
-    cursor: &mut tree_sitter::TreeCursor,
+    _cursor: &mut tree_sitter::TreeCursor,
     result: &mut String,
 ) {
     let kind = node.kind();
@@ -275,7 +309,24 @@ fn extract_typescript_nodes(
     match kind {
         "function_declaration" => {
             // Extract signature: from start to just before body
-            if let Some(body) = node.child_by_field_name("body") {
+            // Try by field name first, then search for statement_block child
+            let mut body = node.child_by_field_name("body");
+            if body.is_none() {
+                let child_count: u32 = node.child_count().try_into().unwrap_or(0);
+                let mut i = 0u32;
+                while i < child_count {
+                    if let Some(child) = node.child(i) {
+                        let kind = child.kind();
+                        if kind == "statement_block" || kind == "block" {
+                            body = Some(child);
+                            break;
+                        }
+                    }
+                    i += 1;
+                }
+            }
+
+            if let Some(body) = body {
                 result.push_str(&source[node.start_byte()..body.start_byte()]);
                 result.push_str("{ /* ... */ }\n");
             } else {
@@ -285,7 +336,23 @@ fn extract_typescript_nodes(
         }
         "arrow_function" => {
             // Extract signature: from start to just before body
-            if let Some(body) = node.child_by_field_name("body") {
+            let mut body = node.child_by_field_name("body");
+            if body.is_none() {
+                let child_count: u32 = node.child_count().try_into().unwrap_or(0);
+                let mut i = 0u32;
+                while i < child_count {
+                    if let Some(child) = node.child(i) {
+                        let kind = child.kind();
+                        if kind == "statement_block" || kind == "block" {
+                            body = Some(child);
+                            break;
+                        }
+                    }
+                    i += 1;
+                }
+            }
+
+            if let Some(body) = body {
                 result.push_str(&source[node.start_byte()..body.start_byte()]);
                 result.push_str("=> { /* ... */ }\n");
             } else {
@@ -295,7 +362,24 @@ fn extract_typescript_nodes(
         }
         "method_definition" => {
             // Extract method signature only
-            if let Some(body) = node.child_by_field_name("body") {
+            // Try by field name first, then search for statement_block child
+            let mut body = node.child_by_field_name("body");
+            if body.is_none() {
+                let child_count: u32 = node.child_count().try_into().unwrap_or(0);
+                let mut i = 0u32;
+                while i < child_count {
+                    if let Some(child) = node.child(i) {
+                        let kind = child.kind();
+                        if kind == "statement_block" || kind == "block" {
+                            body = Some(child);
+                            break;
+                        }
+                    }
+                    i += 1;
+                }
+            }
+
+            if let Some(body) = body {
                 result.push_str(&source[node.start_byte()..body.start_byte()]);
                 result.push_str("{ /* ... */ }\n");
             } else {
@@ -307,48 +391,50 @@ fn extract_typescript_nodes(
             result.push_str(&source[node.start_byte()..node.end_byte()]);
             result.push('\n');
         }
+        "field_definition" | "public_field_definition" => {
+            // Extract field declaration, keeping the type but optionally removing initializer
+            result.push_str(&source[node.start_byte()..node.end_byte()]);
+            result.push('\n');
+        }
         "class_declaration" => {
-            // Extract class header and method signatures only
-            if let Some(name) = node.child_by_field_name("name") {
-                result.push_str(&source[node.start_byte()..name.end_byte()]);
+            // Extract class header and method signatures only. We avoid using the
+            // tree cursor here and instead recurse using the node API directly
+            // to keep behaviour stable across tree-sitter versions.
+            if let Some(body) = node.child_by_field_name("body") {
+                // Class header up to the opening brace
+                result.push_str(&source[node.start_byte()..body.start_byte()]);
+                result.push_str("{\n");
 
-                // Add type parameters if present
-                if let Some(type_params) = node.child_by_field_name("type_parameters") {
-                    result.push_str(&source[type_params.start_byte()..type_params.end_byte()]);
-                }
-
-                // Add heritage clause if present
-                for i in 0..node.child_count() {
-                    if let Some(child) = node.child(i as u32)
-                        && child.kind() == "class_heritage"
-                    {
-                        result.push(' ');
-                        result.push_str(&source[child.start_byte()..child.end_byte()]);
-                    }
-                }
-
-                result.push_str(" {\n");
-
-                // Extract method signatures from class body
-                if let Some(body) = node.child_by_field_name("body") {
-                    let mut body_cursor = body.walk();
-                    if body_cursor.goto_first_child() {
-                        loop {
-                            let child = body_cursor.node();
-                            if child.kind() == "method_definition"
-                                || child.kind() == "public_field_definition"
-                            {
+                // Walk children of the class body to extract method and field
+                // signatures. We intentionally drop method bodies to achieve a
+                // strong compression ratio while preserving structure.
+                let child_count: u32 = body.child_count().try_into().unwrap_or(0);
+                let mut body_cursor = body.walk();
+                for i in 0..child_count {
+                    if let Some(child) = body.child(i) {
+                        match child.kind() {
+                            "method_definition"
+                            | "method_declaration"
+                            | "public_field_definition"
+                            | "field_definition" => {
                                 result.push_str("  ");
                                 extract_typescript_nodes(source, child, &mut body_cursor, result);
                             }
-                            if !body_cursor.goto_next_sibling() {
-                                break;
+                            _ => {
+                                // Recurse into nested nodes to pick up any
+                                // method-like constructs we care about.
+                                extract_typescript_nodes(source, child, &mut body_cursor, result);
                             }
                         }
                     }
                 }
 
                 result.push_str("}\n");
+            } else {
+                // Fallback: if there is no explicit body field, keep the
+                // declaration as-is.
+                result.push_str(&source[node.start_byte()..node.end_byte()]);
+                result.push('\n');
             }
         }
         "import_statement" | "export_statement" => {
@@ -360,15 +446,13 @@ fn extract_typescript_nodes(
             result.push('\n');
         }
         _ => {
-            if node.child_count() > 0 {
-                cursor.goto_first_child();
-                loop {
-                    extract_typescript_nodes(source, cursor.node(), cursor, result);
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
+            // Default: recurse into children using the node API.
+            let child_count = node.child_count();
+            let mut node_cursor = node.walk();
+            for i in 0..child_count {
+                if let Some(child) = node.child(i.try_into().unwrap()) {
+                    extract_typescript_nodes(source, child, &mut node_cursor, result);
                 }
-                cursor.goto_parent();
             }
         }
     }

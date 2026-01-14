@@ -123,6 +123,80 @@ pub fn typescript_project_files() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// Standard Python project files for testing.
+#[allow(dead_code)]
+pub fn python_project_files() -> Vec<(&'static str, &'static str)> {
+    vec![
+        (
+            "setup.py",
+            r#"from setuptools import setup
+
+setup(
+    name="test-project",
+    version="0.1.0",
+    packages=["src"],
+    python_requires=">=3.8",
+)
+"#,
+        ),
+        (
+            "src/__init__.py",
+            r#""""Test module."""
+
+__version__ = "0.1.0"
+"#,
+        ),
+        (
+            "src/main.py",
+            r#"def greet(name: str) -> str:
+    """Greet someone by name."""
+    return f"Hello, {name}!"
+
+
+if __name__ == "__main__":
+    print(greet("World"))
+"#,
+        ),
+        (
+            "src/utils.py",
+            r#""""Utility functions."""
+
+
+def add(a: int, b: int) -> int:
+    """Add two numbers."""
+    return a + b
+
+
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers."""
+    return a * b
+"#,
+        ),
+    ]
+}
+
+/// Helper to create individual files with content in a directory.
+#[allow(dead_code)]
+pub fn create_file_with_content(dir: &TempDir, path: &str, content: &str) -> std::path::PathBuf {
+    let file_path = dir.path().join(path);
+    if let Some(parent) = file_path.parent() {
+        std::fs::create_dir_all(parent).expect("Failed to create parent directories");
+    }
+    std::fs::write(&file_path, content).expect("Failed to write file");
+    file_path
+}
+
+/// Helper to create repomix files in different formats for testing.
+#[allow(dead_code)]
+pub fn create_repomix_file(
+    dir: &TempDir,
+    filename: &str,
+    _format: &str,
+    content: &str,
+) -> std::path::PathBuf {
+    create_file_with_content(dir, filename, content)
+}
+
 /// Creates a temporary ruley.toml config file with specified content.
 pub fn create_config_file(dir: &TempDir, content: &str) -> PathBuf {
     let config_path = dir.path().join("ruley.toml");

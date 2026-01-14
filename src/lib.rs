@@ -43,6 +43,9 @@ pub mod packer;
 pub mod utils;
 
 use anyhow::{Context, Result};
+use cli::config::{ChunkingConfig, ProvidersConfig};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Initialize logging based on verbosity level.
 /// This should be called once at application startup.
@@ -63,9 +66,6 @@ pub fn init_logging(verbose: u8) {
         .without_time()
         .try_init();
 }
-use cli::config::{ChunkingConfig, ProvidersConfig};
-use std::collections::HashMap;
-use std::path::PathBuf;
 
 /// Final resolved configuration after merging all sources (CLI, env, config files).
 /// This struct represents the single source of truth for all configuration values
@@ -216,6 +216,8 @@ pub struct PipelineContext {
     pub temp_files: TempFileRefs,
     /// Progress tracking (stub for now)
     pub progress: ProgressTracker,
+    /// Compressed codebase data
+    pub compressed_codebase: Option<packer::CompressedCodebase>,
 }
 
 impl PipelineContext {
@@ -227,6 +229,7 @@ impl PipelineContext {
             stage: PipelineStage::Init,
             temp_files: TempFileRefs::new(),
             progress: ProgressTracker::new(),
+            compressed_codebase: None,
         }
     }
 
@@ -276,11 +279,54 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 2: Scanning
     ctx.transition_to(PipelineStage::Scanning);
-    // TODO: Implement repository scanning
+    let file_entries = if let Some(_path) = &ctx.config.repomix_file {
+        tracing::info!("Repomix file mode active, skipping scanning.");
+        vec![] // Empty list, scanning is skipped
+    } else {
+        let entries = packer::scan_files(&ctx.config.path, &ctx.config)
+            .await
+            .context("Failed to scan repository files")?;
+        tracing::info!("Discovered {} files", entries.len());
+        entries
+    };
+
+    // Validate that ctx.config.path exists and is accessible
+    // Validate that repomix_file path exists before parsing
+    // Handle empty file lists gracefully
+    if let Some(ref path) = ctx.config.repomix_file {
+        if !path.exists() {
+            return Err(anyhow::anyhow!(
+                "Repomix file does not exist: {}",
+                path.display()
+            ))
+            .context("Failed to validate repomix file path");
+        }
+    } else if !ctx.config.path.exists() {
+        return Err(anyhow::anyhow!(
+            "Repository path does not exist: {}",
+            ctx.config.path.display()
+        ))
+        .context("Failed to validate repository path");
+    }
+
+    // Handle empty file lists gracefully (log warning but don't fail)
+    if file_entries.is_empty() {
+        tracing::warn!("No files found for processing, please check your include/exclude patterns");
+    }
 
     // Stage 3: Compressing
     ctx.transition_to(PipelineStage::Compressing);
-    // TODO: Implement tree-sitter compression
+    let compressed_codebase = if let Some(path) = &ctx.config.repomix_file {
+        packer::parse_repomix(path.as_path())
+            .await
+            .context("Failed to parse repomix file")?
+    } else {
+        packer::compress_codebase(file_entries, &ctx.config)
+            .await
+            .context("Failed to compress codebase")?
+    };
+
+    ctx.compressed_codebase = Some(compressed_codebase);
 
     // Stage 4: Analyzing
     ctx.transition_to(PipelineStage::Analyzing);

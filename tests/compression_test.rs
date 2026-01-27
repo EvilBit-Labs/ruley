@@ -166,6 +166,50 @@ mod tree_sitter_tests {
             "Invalid TypeScript should return error for fallback"
         );
     }
+
+    /// Test JSX files with JSX syntax compress correctly using the TSX grammar.
+    #[test]
+    fn test_tree_sitter_jsx_compression() {
+        let source = r#"
+        import React from 'react';
+
+        function Greeting({ name }) {
+            return (
+                <div className="greeting">
+                    <h1>Hello, {name}!</h1>
+                    <p>Welcome to our app.</p>
+                </div>
+            );
+        }
+
+        export default Greeting;
+        "#;
+
+        let compressor = TreeSitterCompressor;
+        let result = compressor
+            .compress(source, Language::Jsx)
+            .expect("JSX compression should succeed");
+
+        // Verify compression occurred
+        let original_size = source.len() as f32;
+        let compressed_size = result.len() as f32;
+        let ratio = compressed_size / original_size;
+        assert!(
+            ratio < 0.6,
+            "JSX compression should achieve meaningful reduction, got ratio {}",
+            ratio
+        );
+
+        // Verify key elements are preserved
+        assert!(
+            result.contains("import") || result.contains("React"),
+            "Imports should be preserved in JSX compression"
+        );
+        assert!(
+            result.contains("Greeting"),
+            "Function name should be preserved in JSX compression"
+        );
+    }
 }
 
 #[cfg(not(feature = "compression-typescript"))]

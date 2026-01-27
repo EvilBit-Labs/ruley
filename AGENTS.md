@@ -61,6 +61,7 @@ This document provides unified guidance for AI agents working on the ruley proje
 - **Avoid allocations**: Use `Cow<str>` when ownership is conditional
 - **Type safety**: Avoid `unwrap()`, use `?` operator; avoid `as` casts, use `TryFrom`/`TryInto`
 - **Performance**: Trust the compiler, prefer clear code over micro-optimizations
+- **Static regex**: Use `std::sync::LazyLock` for compiled regexes (e.g., `static RE: LazyLock<Regex> = LazyLock::new(|| ...)`)
 
 ## Error Handling
 
@@ -463,6 +464,12 @@ Key dependencies:
 - Use `cargo build --release` for optimized builds
 - Always run linting before committing
 - Use `just` commands when available (see justfile-standards.mdc)
+
+### CI Requirements
+
+- `just ci-check` must be completely green - no warnings, not just no errors
+- Keep `clippy.toml` MSRV in sync with `Cargo.toml` `rust-version`
+- Pre-existing warnings must be fixed, not ignored
 
 ## Justfile Standards
 

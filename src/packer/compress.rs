@@ -18,6 +18,8 @@ pub enum Language {
     Cpp,
     Ruby,
     Php,
+    /// Unknown language - used when language detection fails or file type is not recognized
+    Unknown,
 }
 
 pub trait Compressor {
@@ -781,11 +783,12 @@ pub async fn compress_codebase(
                             }
                         }
                     },
-                    None => match whitespace_compressor.compress(&original_content, Language::Java)
-                    {
-                        Ok(compressed) => (compressed, super::CompressionMethod::Whitespace),
-                        Err(_) => (original_content.clone(), super::CompressionMethod::None),
-                    },
+                    None => {
+                        match whitespace_compressor.compress(&original_content, Language::Unknown) {
+                            Ok(compressed) => (compressed, super::CompressionMethod::Whitespace),
+                            Err(_) => (original_content.clone(), super::CompressionMethod::None),
+                        }
+                    }
                 };
 
                 let compressed_size = compressed_content.len();

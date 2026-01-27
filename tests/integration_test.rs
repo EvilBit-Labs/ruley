@@ -155,6 +155,11 @@ provider = "openai"
             original: Option<String>,
         }
 
+        // SAFETY: In Rust 2024 edition, `std::env::set_var` is unsafe because it can cause
+        // data races if called concurrently with `std::env::var` in other threads. In tests,
+        // we accept this risk as tests are isolated and this is the standard pattern for
+        // testing environment variable handling.
+        #[allow(unsafe_code)]
         impl EnvGuard {
             fn new(key: &'static str, value: &str) -> Self {
                 let original = std::env::var(key).ok();
@@ -165,6 +170,9 @@ provider = "openai"
             }
         }
 
+        // SAFETY: See comment above on EnvGuard impl. `set_var` and `remove_var` are unsafe
+        // in Rust 2024 due to potential data races, but are acceptable in test code.
+        #[allow(unsafe_code)]
         impl Drop for EnvGuard {
             fn drop(&mut self) {
                 unsafe {

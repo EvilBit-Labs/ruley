@@ -126,7 +126,9 @@ name    = "benchmark"
 harness = false
 
 [lints.rust]
-unsafe_code = "forbid"
+# Use "deny" instead of "forbid" to allow `#[allow(unsafe_code)]` in tests
+# that need to use `std::env::set_var` (unsafe in Rust 2024 edition due to data races)
+unsafe_code = "deny"
 
 [profile.release]
 lto           = true

@@ -186,14 +186,9 @@ pub fn create_file_with_content(dir: &TempDir, path: &str, content: &str) -> std
     file_path
 }
 
-/// Helper to create repomix files in different formats for testing.
+/// Helper to create repomix files for testing.
 #[allow(dead_code)]
-pub fn create_repomix_file(
-    dir: &TempDir,
-    filename: &str,
-    _format: &str,
-    content: &str,
-) -> std::path::PathBuf {
+pub fn create_repomix_file(dir: &TempDir, filename: &str, content: &str) -> std::path::PathBuf {
     create_file_with_content(dir, filename, content)
 }
 

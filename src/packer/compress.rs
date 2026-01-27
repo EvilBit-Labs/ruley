@@ -605,11 +605,11 @@ fn extract_rust_nodes(
 
             // Extract method signatures
             for i in 0..node.child_count() {
-                if let Some(child) = node.child(i as u32) {
-                    if child.kind() == "function_item" {
-                        result.push_str("    ");
-                        extract_rust_nodes(source, child, cursor, result);
-                    }
+                if let Some(child) = node.child(i as u32)
+                    && child.kind() == "function_item"
+                {
+                    result.push_str("    ");
+                    extract_rust_nodes(source, child, cursor, result);
                 }
             }
 

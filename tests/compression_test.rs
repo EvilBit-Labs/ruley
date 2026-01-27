@@ -108,6 +108,7 @@ mod tree_sitter_tests {
     }
 
     /// Test TypeScript imports and exports are fully preserved.
+    /// Note: This test uses Language::Tsx since the source contains JSX syntax (<div>Hello</div>).
     #[test]
     fn test_tree_sitter_typescript_imports_exports() {
         let source = r#"
@@ -136,8 +137,9 @@ mod tree_sitter_tests {
         "#;
 
         let compressor = TreeSitterCompressor;
+        // Use Tsx because the source contains JSX syntax
         let result = compressor
-            .compress(source, Language::TypeScript)
+            .compress(source, Language::Tsx)
             .expect("Compression should succeed");
 
         // Verify imports are preserved

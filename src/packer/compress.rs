@@ -275,8 +275,8 @@ impl Compressor for TreeSitterCompressor {
             Language::TypeScript => Self::compress_typescript(source, false),
             Language::Tsx => Self::compress_typescript(source, true),
             Language::JavaScript | Language::Jsx => {
-                // JavaScript/JSX uses the same tree-sitter grammar as TypeScript/TSX
-                // JSX syntax is handled by TSX grammar
+                // JavaScript uses the TypeScript grammar (a superset of JavaScript).
+                // JSX uses the TSX grammar to handle JSX syntax correctly.
                 let is_jsx = matches!(language, Language::Jsx);
                 Self::compress_typescript(source, is_jsx)
             }

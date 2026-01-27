@@ -9,6 +9,7 @@ repository  = "https://github.com/EvilBit-Labs/ruley"
 homepage    = "https://github.com/EvilBit-Labs/ruley"
 keywords    = ["ai", "llm", "cursor", "claude", "copilot", "ide", "rules"]
 categories  = ["command-line-utilities", "development-tools"]
+rust-version = "1.85"
 
 [features]
 default = ["anthropic", "openai", "compression-typescript"]
@@ -123,6 +124,9 @@ typos     = "0.10.39"
 [[bench]]
 name    = "benchmark"
 harness = false
+
+[lints.rust]
+unsafe_code = "forbid"
 
 [profile.release]
 lto           = true

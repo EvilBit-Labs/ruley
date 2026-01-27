@@ -42,8 +42,10 @@ pub(crate) fn detect_language(path: &Path) -> Option<Language> {
     path.extension()
         .and_then(|ext| ext.to_str())
         .and_then(|ext_str| match ext_str {
-            "ts" | "tsx" => Some(Language::TypeScript),
-            "js" | "jsx" => Some(Language::JavaScript),
+            "ts" => Some(Language::TypeScript),
+            "tsx" => Some(Language::Tsx),
+            "js" => Some(Language::JavaScript),
+            "jsx" => Some(Language::Jsx),
             "py" => Some(Language::Python),
             "rs" => Some(Language::Rust),
             "go" => Some(Language::Go),

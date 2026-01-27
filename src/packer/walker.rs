@@ -180,3 +180,44 @@ impl FileWalker {
         Ok(files)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test that detect_language correctly maps file extensions to languages.
+    #[test]
+    fn test_detect_language_extension_mapping() {
+        // TypeScript family
+        assert_eq!(
+            detect_language(Path::new("app.ts")),
+            Some(Language::TypeScript)
+        );
+        assert_eq!(
+            detect_language(Path::new("component.tsx")),
+            Some(Language::Tsx)
+        );
+
+        // JavaScript family
+        assert_eq!(
+            detect_language(Path::new("script.js")),
+            Some(Language::JavaScript)
+        );
+        assert_eq!(
+            detect_language(Path::new("component.jsx")),
+            Some(Language::Jsx)
+        );
+
+        // Other languages
+        assert_eq!(
+            detect_language(Path::new("main.py")),
+            Some(Language::Python)
+        );
+        assert_eq!(detect_language(Path::new("lib.rs")), Some(Language::Rust));
+        assert_eq!(detect_language(Path::new("main.go")), Some(Language::Go));
+
+        // Unknown extension returns None
+        assert_eq!(detect_language(Path::new("readme.md")), None);
+        assert_eq!(detect_language(Path::new("config.toml")), None);
+    }
+}

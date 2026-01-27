@@ -5,7 +5,11 @@ use std::sync::LazyLock;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Language {
     TypeScript,
+    /// TypeScript with JSX syntax (.tsx files)
+    Tsx,
     JavaScript,
+    /// JavaScript with JSX syntax (.jsx files)
+    Jsx,
     Python,
     Rust,
     Go,
@@ -56,26 +60,15 @@ pub struct TreeSitterCompressor;
 #[cfg(feature = "compression-typescript")]
 impl TreeSitterCompressor {
     /// Compress TypeScript/TSX source code using tree-sitter
-    pub fn compress_typescript(source: &str) -> Result<String, RuleyError> {
+    ///
+    /// # Arguments
+    /// * `source` - The TypeScript/TSX source code to compress
+    /// * `is_tsx` - Whether this is a TSX file (contains JSX syntax). Determined by file extension.
+    pub fn compress_typescript(source: &str, is_tsx: bool) -> Result<String, RuleyError> {
         use tree_sitter::Parser;
 
         let mut parser = Parser::new();
-        // Detect JSX by looking for JSX syntax patterns (< followed by identifier)
-        // or React-specific patterns
-        let is_tsx = source.contains("jsx")
-            || source.contains("React.FC")
-            || source.contains("ReactNode")
-            || source.contains("JSX.Element")
-            || (source.contains('<')
-                && source.chars().any(|c| {
-                    c == '<'
-                        && source.split_once('<').is_some_and(|(_, after)| {
-                            after
-                                .chars()
-                                .next()
-                                .is_some_and(|next| next.is_alphabetic())
-                        })
-                }));
+        // Use the appropriate grammar based on file extension
         let language = if is_tsx {
             tree_sitter_typescript::LANGUAGE_TSX.into()
         } else {
@@ -128,7 +121,7 @@ impl TreeSitterCompressor {
 #[cfg(not(feature = "compression-typescript"))]
 impl TreeSitterCompressor {
     /// Compression for TypeScript is not available (feature disabled)
-    pub fn compress_typescript(source: &str) -> Result<String, RuleyError> {
+    pub fn compress_typescript(source: &str, _is_tsx: bool) -> Result<String, RuleyError> {
         let _ = source;
         Err(RuleyError::Compression {
             language: "TypeScript".to_string(),
@@ -279,7 +272,14 @@ impl TreeSitterCompressor {
 impl Compressor for TreeSitterCompressor {
     fn compress(&self, source: &str, language: Language) -> Result<String, RuleyError> {
         match language {
-            Language::TypeScript => Self::compress_typescript(source),
+            Language::TypeScript => Self::compress_typescript(source, false),
+            Language::Tsx => Self::compress_typescript(source, true),
+            Language::JavaScript | Language::Jsx => {
+                // JavaScript/JSX uses the same tree-sitter grammar as TypeScript/TSX
+                // JSX syntax is handled by TSX grammar
+                let is_jsx = matches!(language, Language::Jsx);
+                Self::compress_typescript(source, is_jsx)
+            }
             Language::Python => Self::compress_python(source),
             Language::Rust => Self::compress_rust(source),
             Language::Go => Self::compress_go(source),

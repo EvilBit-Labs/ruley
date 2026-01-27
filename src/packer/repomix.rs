@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use regex::Regex;
 use serde::Deserialize;
@@ -13,6 +14,12 @@ use crate::utils::error::RuleyError;
 use super::compress::Language;
 use super::walker::detect_language;
 use super::{CompressedCodebase, CompressedFile, CompressionMethod};
+
+/// Regex for parsing markdown repomix format (## File: path followed by code block)
+static MARKDOWN_FILE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)##\s*File:\s*(?P<path>[^\n]+)\n```[^\n]*\n(?P<body>.*?)```")
+        .expect("Invalid markdown file regex")
+});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepomixFormat {
@@ -87,11 +94,8 @@ pub async fn parse_repomix(path: &Path) -> Result<CompressedCodebase, RuleyError
 }
 
 fn parse_markdown(content: &str) -> Result<Vec<CompressedFile>, RuleyError> {
-    let regex = Regex::new(r"(?s)##\s*File:\s*(?P<path>[^\n]+)\n```[^\n]*\n(?P<body>.*?)```")
-        .map_err(|err| parse_error("Failed to compile markdown parser", Some(Box::new(err))))?;
-
     let mut files = Vec::new();
-    for caps in regex.captures_iter(content) {
+    for caps in MARKDOWN_FILE_REGEX.captures_iter(content) {
         let path = caps["path"].trim();
         let body = caps["body"].to_string();
 

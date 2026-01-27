@@ -10,7 +10,7 @@ This document provides unified guidance for AI agents working on the ruley proje
 
 - **Language**: Rust 2024 Edition
 - **Package**: Single crate `ruley` (not a workspace)
-- **Linting**: Zero warnings policy with `unsafe_code = "forbid"`
+- **Linting**: Zero warnings policy with `unsafe_code = "deny"` (allows `#[allow]` in tests)
 - **License**: Apache-2.0
 
 ### Module Structure
@@ -42,7 +42,7 @@ This document provides unified guidance for AI agents working on the ruley proje
 ### Code Quality
 
 - **Zero warnings**: All code must pass `cargo clippy -- -D warnings`
-- **No unsafe code**: `unsafe_code = "forbid"` enforced at package level
+- **No unsafe code**: `unsafe_code = "deny"` enforced at package level (tests may use `#[allow(unsafe_code)]` for env var manipulation in Rust 2024)
 - **Formatting**: Use standard `rustfmt` with project configuration
 - **File size**: Keep files focused and manageable (500-600 lines max when possible)
 
@@ -338,7 +338,7 @@ Follow the **test proportionality principle**: Keep only tests for critical func
 
 ### Code Safety
 
-- `unsafe_code = "forbid"` enforced at workspace level
+- `unsafe_code = "deny"` enforced at package level (not `forbid`, to allow test exceptions)
 - Use safe Rust patterns throughout
 - Validate all external inputs
 - Implement proper error boundaries
@@ -488,7 +488,7 @@ When creating the justfile, include these standard commands:
 ## Key Principles Summary
 
 1. **Zero warnings policy**: All code must pass `cargo clippy -- -D warnings`
-2. **No unsafe code**: `unsafe_code = "forbid"` enforced at package level
+2. **No unsafe code**: `unsafe_code = "deny"` enforced at package level
 3. **Error handling**: Use `thiserror` for public APIs, `anyhow` for internal code
 4. **Async-first**: Use Tokio runtime for all I/O operations
 5. **Test proportionality**: Test only critical functionality and real edge cases

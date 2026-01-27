@@ -290,27 +290,19 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         entries
     };
 
-    // Validate that ctx.config.path exists and is accessible
-    // Validate that repomix_file path exists before parsing
-    // Handle empty file lists gracefully
-    if let Some(ref path) = ctx.config.repomix_file {
-        if !path.exists() {
-            return Err(anyhow::anyhow!(
-                "Repomix file does not exist: {}",
-                path.display()
-            ))
-            .context("Failed to validate repomix file path");
-        }
-    } else if !ctx.config.path.exists() {
+    // Validate repomix file exists if specified
+    if let Some(ref path) = ctx.config.repomix_file
+        && !path.exists()
+    {
         return Err(anyhow::anyhow!(
-            "Repository path does not exist: {}",
-            ctx.config.path.display()
+            "Repomix file does not exist: {}",
+            path.display()
         ))
-        .context("Failed to validate repository path");
+        .context("Failed to validate repomix file path");
     }
 
-    // Handle empty file lists gracefully (log warning but don't fail)
-    if file_entries.is_empty() {
+    // Warn about empty file lists (only in normal scan mode, not repomix mode)
+    if file_entries.is_empty() && ctx.config.repomix_file.is_none() {
         tracing::warn!("No files found for processing, please check your include/exclude patterns");
     }
 

@@ -99,13 +99,18 @@ pub struct CostBreakdown {
 ///
 /// `CostCalculator` uses the pricing information from an LLM provider to
 /// calculate the cost of operations based on token counts. Pricing is
-/// specified per 1,000 tokens (not per 1M as often advertised).
+/// specified as dollars per 1,000 tokens.
 ///
 /// # Pricing Convention
 ///
-/// The `Pricing` struct uses per-1K token rates:
-/// - Anthropic Claude Sonnet: $3/1M input = $0.003/1K, $15/1M output = $0.015/1K
-/// - OpenAI GPT-4o: $2.5/1M input = $0.0025/1K, $10/1M output = $0.01/1K
+/// The `Pricing` struct uses dollars per 1K tokens:
+/// - Anthropic Claude Sonnet: `input_per_1k: 3.0` ($3.00/1K tokens), `output_per_1k: 15.0` ($15.00/1K tokens)
+/// - OpenAI GPT-4o: `input_per_1k: 2.5` ($2.50/1K tokens), `output_per_1k: 10.0` ($10.00/1K tokens)
+/// - Ollama (local): `input_per_1k: 0.0`, `output_per_1k: 0.0` (free)
+///
+/// Note: These are placeholder values for demonstration. Actual API pricing
+/// varies by model and may be significantly lower (e.g., $3/1M instead of $3/1K).
+/// Consult the provider's pricing page for accurate rates.
 ///
 /// # Example
 ///
@@ -121,6 +126,7 @@ pub struct CostBreakdown {
 ///
 /// // 1000 input tokens, 500 output tokens
 /// let cost = calculator.calculate_cost(1000, 500);
+/// // cost = (1000/1000 * 3.0) + (500/1000 * 15.0) = 3.0 + 7.5 = 10.5
 /// ```
 #[derive(Debug, Clone)]
 pub struct CostCalculator {

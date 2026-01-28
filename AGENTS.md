@@ -62,6 +62,7 @@ This document provides unified guidance for AI agents working on the ruley proje
 - **Type safety**: Avoid `unwrap()`, use `?` operator; avoid `as` casts, use `TryFrom`/`TryInto`
 - **Performance**: Trust the compiler, prefer clear code over micro-optimizations
 - **Static regex**: Use `std::sync::LazyLock` for compiled regexes (e.g., `static RE: LazyLock<Regex> = LazyLock::new(|| ...)`)
+- **cfg-gated imports**: Place imports used only in `#[cfg(...)]` blocks inside those blocks to avoid unused import warnings
 
 ## Error Handling
 
@@ -470,6 +471,7 @@ Key dependencies:
 - `just ci-check` must be completely green - no warnings, not just no errors
 - Keep `clippy.toml` MSRV in sync with `Cargo.toml` `rust-version`
 - Pre-existing warnings must be fixed, not ignored
+- GitHub CI runs clippy with `--all-features`: run `cargo clippy --all-targets --all-features -- -D warnings` before pushing to catch all warnings
 
 ## Justfile Standards
 

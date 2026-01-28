@@ -45,14 +45,6 @@ pub enum TokenizerModel {
 }
 
 impl TokenizerModel {
-    /// Get the encoding name for this model.
-    fn encoding_name(&self) -> &'static str {
-        match self {
-            Self::Gpt4 | Self::Claude => "cl100k_base",
-            Self::Gpt4o => "o200k_base",
-        }
-    }
-
     /// Create from a model name string.
     ///
     /// # Arguments
@@ -105,15 +97,11 @@ impl TiktokenTokenizer {
     ///
     /// Returns an error if the encoding cannot be loaded.
     pub fn new(model: TokenizerModel) -> Result<Self, RuleyError> {
-        let encoding = match model.encoding_name() {
-            "cl100k_base" => cl100k_base().map_err(|e| RuleyError::Config(e.to_string()))?,
-            "o200k_base" => o200k_base().map_err(|e| RuleyError::Config(e.to_string()))?,
-            _ => {
-                return Err(RuleyError::Config(format!(
-                    "Unknown encoding: {}",
-                    model.encoding_name()
-                )));
+        let encoding = match model {
+            TokenizerModel::Gpt4 | TokenizerModel::Claude => {
+                cl100k_base().map_err(|e| RuleyError::Config(e.to_string()))?
             }
+            TokenizerModel::Gpt4o => o200k_base().map_err(|e| RuleyError::Config(e.to_string()))?,
         };
 
         Ok(Self { encoding })
@@ -145,9 +133,9 @@ impl Tokenizer for TiktokenTokenizer {
 /// Uses cl100k_base encoding as a reasonable approximation, since there is
 /// no official Anthropic tokenizer in Rust. Claude's tokenization is similar
 /// to GPT-4's tokenization.
-pub struct AnthropicTokenizer {
-    encoding: tiktoken_rs::CoreBPE,
-}
+///
+/// This is a thin wrapper around `TiktokenTokenizer` configured for Claude models.
+pub struct AnthropicTokenizer(TiktokenTokenizer);
 
 impl AnthropicTokenizer {
     /// Create a new Anthropic tokenizer.
@@ -156,14 +144,13 @@ impl AnthropicTokenizer {
     ///
     /// Returns an error if the encoding cannot be loaded.
     pub fn new() -> Result<Self, RuleyError> {
-        let encoding = cl100k_base().map_err(|e| RuleyError::Config(e.to_string()))?;
-        Ok(Self { encoding })
+        Ok(Self(TiktokenTokenizer::new(TokenizerModel::Claude)?))
     }
 }
 
 impl Tokenizer for AnthropicTokenizer {
     fn count_tokens(&self, text: &str) -> usize {
-        self.encoding.encode_with_special_tokens(text).len()
+        self.0.count_tokens(text)
     }
 }
 

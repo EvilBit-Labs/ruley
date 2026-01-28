@@ -331,7 +331,7 @@ mod whitespace_tests {
         // Whitespace compression should stay within 0.6-0.7 range
         // Observed: can achieve better (0.4-0.6) with heavy whitespace
         assert!(
-            ratio >= 0.4 && ratio <= 0.7,
+            (0.4..=0.7).contains(&ratio),
             "Whitespace compression ratio should be 0.4-0.7, got {}",
             ratio
         );
@@ -394,7 +394,7 @@ mod whitespace_tests {
         // Should achieve meaningful compression
         // Representative samples with excess whitespace can achieve better ratios
         assert!(
-            ratio >= 0.5 && ratio <= 0.7,
+            (0.5..=0.7).contains(&ratio),
             "Whitespace compression ratio should be 0.5-0.7 for representative samples, got {}",
             ratio
         );

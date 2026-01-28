@@ -640,4 +640,23 @@ mod tests {
         // Should have tried twice (first failure + successful retry)
         assert_eq!(call_count.load(Ordering::SeqCst), 2);
     }
+
+    #[tokio::test]
+    async fn test_zero_retries_fails_immediately() {
+        let provider = MockProvider::new(1, MockErrorType::RateLimited);
+        let call_count = provider.call_count.clone();
+        let retry_config = RetryConfig {
+            max_retries: 0,
+            initial_delay_ms: 1,
+            max_delay_ms: 10,
+            jitter: false,
+        };
+        let client = LLMClient::with_retry_config(Box::new(provider), retry_config);
+
+        let result = client.complete(&[], &CompletionOptions::default()).await;
+
+        assert!(result.is_err());
+        // Should have tried exactly once (no retries when max_retries = 0)
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+    }
 }

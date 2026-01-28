@@ -62,6 +62,7 @@ impl ChunkConfig {
     /// # Errors
     ///
     /// Returns an error if `overlap_size >= chunk_size`.
+    #[must_use = "this returns a Result that should be checked"]
     pub fn new(chunk_size: usize, overlap_size: usize) -> Result<Self, RuleyError> {
         if overlap_size >= chunk_size {
             return Err(RuleyError::ValidationError {
@@ -92,6 +93,7 @@ impl ChunkConfig {
     /// # Errors
     ///
     /// Returns an error if chunk_size is too small.
+    #[must_use = "this returns a Result that should be checked"]
     pub fn with_chunk_size(chunk_size: usize) -> Result<Self, RuleyError> {
         let overlap_size = chunk_size / 10; // 10% overlap
         Self::new(chunk_size, overlap_size)
@@ -136,6 +138,7 @@ impl Chunk {
     /// # Returns
     ///
     /// A single chunk containing the entire codebase.
+    #[must_use]
     pub fn from_codebase(codebase: &CompressedCodebase, tokenizer: &dyn Tokenizer) -> Self {
         let content = format_codebase_content(codebase);
         let token_count = tokenizer.count_tokens(&content);
@@ -185,6 +188,7 @@ impl Chunk {
 ///         chunk.id, chunk.token_count, chunk.overlap_token_count);
 /// }
 /// ```
+#[must_use = "this returns a Result that should be checked"]
 pub fn chunk_codebase(
     codebase: &CompressedCodebase,
     config: &ChunkConfig,
@@ -306,10 +310,25 @@ fn find_overlap_start(
     // Binary search for the overlap start position
     let mut low = 0;
     let mut high = current_pos;
+    let mut last_mid = None;
 
     while low < high {
-        let mid = (low + high) / 2;
-        let mid = find_char_boundary(content, mid);
+        let raw_mid = (low + high) / 2;
+        let mid = find_char_boundary(content, raw_mid);
+
+        // Ensure we're making progress - if we're evaluating the same position,
+        // break to avoid infinite loop
+        if Some(mid) == last_mid {
+            break;
+        }
+        last_mid = Some(mid);
+
+        // Ensure we're making progress - if mid snaps back to low,
+        // we need to advance to avoid infinite loop
+        if mid == low && low < high {
+            low += 1;
+            continue;
+        }
 
         let overlap_content = &content[mid..current_pos];
         let tokens = tokenizer.count_tokens(overlap_content);
@@ -350,10 +369,25 @@ fn find_chunk_end(
     let mut low = start_pos;
     let mut high = content.len();
     let mut best_pos = start_pos + 1; // Ensure we make at least some progress
+    let mut last_mid = None;
 
     while low < high {
-        let mid = (low + high) / 2;
-        let mid = find_char_boundary(content, mid);
+        let raw_mid = (low + high) / 2;
+        let mid = find_char_boundary(content, raw_mid);
+
+        // Ensure we're making progress - if we're evaluating the same position,
+        // break to avoid infinite loop
+        if Some(mid) == last_mid {
+            break;
+        }
+        last_mid = Some(mid);
+
+        // Ensure we're making progress - if mid snaps back to low,
+        // we need to advance to avoid infinite loop
+        if mid == low && low < high {
+            low += 1;
+            continue;
+        }
 
         if mid <= start_pos {
             low = start_pos + 1;
@@ -400,8 +434,12 @@ fn find_clean_break(content: &str, pos: usize) -> usize {
         return content.len();
     }
 
-    // Look for a newline within 100 characters before pos
-    let search_start = pos.saturating_sub(100);
+    // Ensure pos is on a valid character boundary
+    let pos = find_char_boundary(content, pos);
+
+    // Look for a newline within 100 bytes before pos
+    // Ensure search_start is on a valid character boundary
+    let search_start = find_char_boundary(content, pos.saturating_sub(100));
     let search_region = &content[search_start..pos];
 
     if let Some(newline_offset) = search_region.rfind('\n') {
@@ -681,5 +719,97 @@ mod tests {
         // Chunk size too small
         let result = ChunkConfig::new(500, 50);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_content_with_no_newlines() {
+        // Single very long line with no newlines - tests chunking without clean break points
+        let long_line = "word ".repeat(5000); // 5000 words, no newlines
+        let codebase = create_test_codebase(vec![("long_line.txt", &long_line)]);
+
+        // Use a chunk size that forces multiple chunks
+        let config = ChunkConfig::new(1000, 100).unwrap();
+        let tokenizer = WordTokenizer;
+
+        let chunks = chunk_codebase(&codebase, &config, &tokenizer).unwrap();
+
+        // Should still produce chunks even without newline break points
+        assert!(
+            chunks.len() > 1,
+            "Expected multiple chunks for long content without newlines"
+        );
+
+        // Verify all content is covered - each chunk should have reasonable size
+        for chunk in &chunks {
+            assert!(
+                chunk.token_count <= config.chunk_size,
+                "Chunk {} exceeds max size: {} > {}",
+                chunk.id,
+                chunk.token_count,
+                config.chunk_size
+            );
+        }
+    }
+
+    #[test]
+    fn test_unicode_multibyte_at_chunk_boundaries() {
+        // Content with multi-byte UTF-8 characters that might land at chunk boundaries
+        // Mix of ASCII and various multi-byte characters:
+        // - 2-byte: é (C3 A9), ñ (C3 B1)
+        // - 3-byte: 中 (E4 B8 AD), 日 (E6 97 A5)
+        // - 4-byte: 𝄞 (F0 9D 84 9E), 🎵 (F0 9F 8E B5)
+        let unicode_content =
+            "word1 café word2 日本語 word3 🎵music🎵 word4 résumé word5 中文 word6 ".repeat(200);
+        let codebase = create_test_codebase(vec![("unicode.txt", &unicode_content)]);
+
+        // Chunk size that forces multiple chunks with unicode content
+        let config = ChunkConfig::new(1000, 100).unwrap();
+        let tokenizer = WordTokenizer;
+
+        let chunks = chunk_codebase(&codebase, &config, &tokenizer).unwrap();
+
+        // Should produce valid chunks without panicking on UTF-8 boundaries
+        assert!(!chunks.is_empty(), "Should produce at least one chunk");
+
+        // Verify all chunks have valid UTF-8 content (guaranteed by String type)
+        // and that we can iterate through them without panic
+        for chunk in &chunks {
+            // Verify content is accessible (proves valid UTF-8)
+            let _ = chunk.content.len();
+            let _ = chunk.content.chars().count();
+
+            // First chunk should have zero overlap
+            if chunk.id == 0 {
+                assert_eq!(chunk.overlap_token_count, 0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_binary_search_convergence_with_multibyte() {
+        // Specifically test the binary search doesn't infinite loop with multi-byte chars
+        // Create content where char boundaries might cause issues
+        // Using smaller content to keep test fast
+        let tricky_content = "é".repeat(100) + &"a".repeat(100);
+        let codebase = create_test_codebase(vec![("tricky.txt", &tricky_content)]);
+
+        // Char tokenizer that counts characters, not words
+        struct CharTokenizer;
+        impl Tokenizer for CharTokenizer {
+            fn count_tokens(&self, text: &str) -> usize {
+                text.chars().count()
+            }
+        }
+
+        // Use smaller chunk size relative to content for faster test
+        let config = ChunkConfig::new(1000, 100).unwrap();
+        let tokenizer = CharTokenizer;
+
+        // This should complete without infinite loop
+        let chunks = chunk_codebase(&codebase, &config, &tokenizer).unwrap();
+        assert!(
+            !chunks.is_empty(),
+            "Should produce chunks without infinite loop"
+        );
     }
 }

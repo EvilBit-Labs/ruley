@@ -712,6 +712,9 @@ async fn perform_analysis(
 ) -> Result<String> {
     let num_chunks = chunks.len();
 
+    // Calculate total input tokens from all chunks (includes actual codebase content)
+    let total_input_tokens: usize = chunks.iter().map(|c| c.token_count).sum();
+
     if num_chunks == 1 {
         tracing::info!("Analyzing codebase (single chunk, no merge required)");
         let result = llm::analysis::analyze_chunked(chunks, prompt, client)
@@ -720,11 +723,15 @@ async fn perform_analysis(
 
         // Track the operation cost
         if let Some(ref mut tracker) = ctx.cost_tracker {
-            // Estimate output tokens based on result length (rough approximation)
             let tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
             let output_tokens = tokenizer.count_tokens(&result);
-            let input_tokens = tokenizer.count_tokens(prompt);
-            tracker.add_operation("analysis", input_tokens, output_tokens);
+            // Include prompt tokens plus the codebase content tokens
+            let prompt_tokens = tokenizer.count_tokens(prompt);
+            tracker.add_operation(
+                "analysis",
+                total_input_tokens + prompt_tokens,
+                output_tokens,
+            );
         }
 
         Ok(result)
@@ -737,8 +744,18 @@ async fn perform_analysis(
             .await
             .context("Failed to analyze chunked codebase")?;
 
-        // For chunked analysis, the analyze_chunked function handles tracking internally
-        // We just report the final result
+        // Track cost for chunked analysis
+        // Each chunk is analyzed separately, then merged
+        if let Some(ref mut tracker) = ctx.cost_tracker {
+            let tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
+            let output_tokens = tokenizer.count_tokens(&result);
+            let prompt_tokens = tokenizer.count_tokens(prompt);
+            // Total input = all chunk tokens + prompt overhead per chunk + merge input
+            // Simplification: count total input + prompt per chunk
+            let total_with_prompts = total_input_tokens + (prompt_tokens * num_chunks);
+            tracker.add_operation("chunked_analysis", total_with_prompts, output_tokens);
+        }
+
         tracing::info!("Chunk analysis and merge completed");
 
         Ok(result)

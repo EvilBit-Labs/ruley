@@ -23,6 +23,8 @@ struct AnthropicRequest<'a> {
     messages: Vec<AnthropicMessage<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<&'a str>,
 }
 
 /// A message in the Anthropic format.
@@ -68,22 +70,34 @@ struct ErrorDetail {
 }
 
 impl AnthropicProvider {
-    pub fn new(api_key: String, model: String) -> Self {
+    /// Creates a new Anthropic provider with the given API key and model.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client cannot be created.
+    pub fn new(api_key: String, model: String) -> Result<Self, RuleyError> {
         let client = Client::builder()
             .timeout(Duration::from_secs(120))
             .build()
-            .expect("Failed to create HTTP client");
-        Self {
+            .map_err(|e| RuleyError::Config(format!("Failed to create HTTP client: {}", e)))?;
+        Ok(Self {
             api_key,
             model,
             client,
-        }
+        })
     }
 
+    /// Creates a new Anthropic provider from environment variables.
+    ///
+    /// Reads the `ANTHROPIC_API_KEY` environment variable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the API key is not set or if the HTTP client cannot be created.
     pub fn from_env() -> Result<Self, RuleyError> {
         let api_key = std::env::var("ANTHROPIC_API_KEY")
             .map_err(|_| RuleyError::missing_api_key("anthropic"))?;
-        Ok(Self::new(api_key, "claude-sonnet-4-5-20250929".to_string()))
+        Self::new(api_key, "claude-sonnet-4-5-20250929".to_string())
     }
 
     /// Construct the system prompt from the first message if it has role "system".
@@ -121,30 +135,18 @@ impl LLMProvider for AnthropicProvider {
             max_tokens: options.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
             messages: anthropic_messages,
             temperature: options.temperature,
+            system: system_prompt,
         };
 
-        let mut request = self
+        let response = self
             .client
             .post(ANTHROPIC_API_URL)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", ANTHROPIC_VERSION)
-            .header("content-type", "application/json");
-
-        // Add system prompt if present
-        if let Some(system) = system_prompt {
-            // Anthropic accepts system as a top-level field
-            request = request.json(&serde_json::json!({
-                "model": &self.model,
-                "max_tokens": options.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
-                "messages": request_body.messages,
-                "temperature": options.temperature,
-                "system": system
-            }));
-        } else {
-            request = request.json(&request_body);
-        }
-
-        let response = request.send().await?;
+            .header("content-type", "application/json")
+            .json(&request_body)
+            .send()
+            .await?;
         let status = response.status();
 
         // Handle rate limiting

@@ -2,6 +2,22 @@ use crate::llm::provider::{CompletionOptions, CompletionResponse, LLMProvider, M
 use crate::utils::error::RuleyError;
 
 /// Configuration for retry behavior on transient failures.
+///
+/// This struct configures exponential backoff with jitter for retrying
+/// failed LLM requests. Retries are performed on transient errors such
+/// as rate limiting (HTTP 429) and server errors (HTTP 5xx).
+///
+/// # Example
+///
+/// ```
+/// use ruley::llm::client::RetryConfig;
+///
+/// let config = RetryConfig {
+///     max_retries: 5,
+///     initial_delay_ms: 500,
+///     max_delay_ms: 60000,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct RetryConfig {
     /// Maximum number of retry attempts.
@@ -22,12 +38,42 @@ impl Default for RetryConfig {
     }
 }
 
+/// A high-level client for interacting with LLM providers.
+///
+/// `LLMClient` wraps an [`LLMProvider`] implementation and provides additional
+/// functionality such as retry logic with exponential backoff. It serves as
+/// the primary interface for making LLM requests in ruley.
+///
+/// # Example
+///
+/// ```no_run
+/// use ruley::llm::client::{LLMClient, RetryConfig};
+/// use ruley::llm::providers::anthropic::AnthropicProvider;
+/// use ruley::llm::provider::{Message, CompletionOptions};
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let provider = AnthropicProvider::from_env()?;
+/// let client = LLMClient::new(Box::new(provider));
+///
+/// let messages = vec![
+///     Message { role: "user".into(), content: "Hello!".into() },
+/// ];
+/// let response = client.complete(&messages, &CompletionOptions::default()).await?;
+/// println!("Response: {}", response.content);
+/// # Ok(())
+/// # }
+/// ```
 pub struct LLMClient {
     provider: Box<dyn LLMProvider>,
     retry_config: RetryConfig,
 }
 
 impl LLMClient {
+    /// Creates a new `LLMClient` with the given provider and default retry configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - A boxed LLM provider implementation.
     pub fn new(provider: Box<dyn LLMProvider>) -> Self {
         Self {
             provider,
@@ -35,7 +81,12 @@ impl LLMClient {
         }
     }
 
-    /// Create a new LLMClient with custom retry configuration.
+    /// Creates a new `LLMClient` with custom retry configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - A boxed LLM provider implementation.
+    /// * `retry_config` - Custom retry configuration for handling transient failures.
     pub fn with_retry_config(provider: Box<dyn LLMProvider>, retry_config: RetryConfig) -> Self {
         Self {
             provider,
@@ -43,10 +94,20 @@ impl LLMClient {
         }
     }
 
-    /// Complete a prompt using the configured LLM provider.
+    /// Completes a prompt using the configured LLM provider.
     ///
-    /// This method wraps the provider's complete method and will be extended
-    /// with retry logic in a future implementation.
+    /// This method sends the given messages to the LLM provider and returns
+    /// the completion response. Retry logic with exponential backoff will be
+    /// applied for transient failures (to be implemented in Task #7).
+    ///
+    /// # Arguments
+    ///
+    /// * `messages` - The conversation messages to send to the LLM.
+    /// * `options` - Configuration options for the completion request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the LLM provider fails to complete the request.
     pub async fn complete(
         &self,
         messages: &[Message],
@@ -57,17 +118,17 @@ impl LLMClient {
         self.provider.complete(messages, options).await
     }
 
-    /// Get the model name from the provider.
+    /// Returns the model name from the underlying provider.
     pub fn model(&self) -> &str {
         self.provider.model()
     }
 
-    /// Get pricing information from the provider.
+    /// Returns pricing information from the underlying provider.
     pub fn pricing(&self) -> crate::llm::provider::Pricing {
         self.provider.pricing()
     }
 
-    /// Get the retry configuration.
+    /// Returns a reference to the retry configuration.
     pub fn retry_config(&self) -> &RetryConfig {
         &self.retry_config
     }

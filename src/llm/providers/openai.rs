@@ -73,22 +73,34 @@ struct ErrorDetail {
 }
 
 impl OpenAIProvider {
-    pub fn new(api_key: String, model: String) -> Self {
+    /// Creates a new OpenAI provider with the given API key and model.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client cannot be created.
+    pub fn new(api_key: String, model: String) -> Result<Self, RuleyError> {
         let client = Client::builder()
             .timeout(Duration::from_secs(120))
             .build()
-            .expect("Failed to create HTTP client");
-        Self {
+            .map_err(|e| RuleyError::Config(format!("Failed to create HTTP client: {}", e)))?;
+        Ok(Self {
             api_key,
             model,
             client,
-        }
+        })
     }
 
+    /// Creates a new OpenAI provider from environment variables.
+    ///
+    /// Reads the `OPENAI_API_KEY` environment variable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the API key is not set or if the HTTP client cannot be created.
     pub fn from_env() -> Result<Self, RuleyError> {
         let api_key =
             std::env::var("OPENAI_API_KEY").map_err(|_| RuleyError::missing_api_key("openai"))?;
-        Ok(Self::new(api_key, "gpt-4o".to_string()))
+        Self::new(api_key, "gpt-4o".to_string())
     }
 }
 

@@ -50,8 +50,8 @@ use llm::cost::{CostCalculator, CostTracker};
 use llm::provider::LLMProvider;
 use llm::tokenizer::{AnthropicTokenizer, TiktokenTokenizer, Tokenizer, TokenizerModel};
 use std::collections::HashMap;
-use std::io::{self, Write};
 use std::path::PathBuf;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 /// Initialize logging based on verbosity level.
 /// This should be called once at application startup.
@@ -353,11 +353,9 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Determine chunk configuration
     let chunk_config = if let Some(ref chunking) = ctx.config.chunking {
-        ChunkConfig::new(
-            chunking.chunk_size.unwrap_or(ctx.config.chunk_size),
-            chunking.overlap.unwrap_or(ctx.config.chunk_size / 10),
-        )
-        .context("Invalid chunking configuration")?
+        let chunk_size = chunking.chunk_size.unwrap_or(ctx.config.chunk_size);
+        let overlap = chunking.overlap.unwrap_or(chunk_size / 10);
+        ChunkConfig::new(chunk_size, overlap).context("Invalid chunking configuration")?
     } else {
         ChunkConfig::with_chunk_size(ctx.config.chunk_size)
             .context("Invalid chunk size configuration")?
@@ -386,15 +384,25 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     let calculator = CostCalculator::new(pricing);
     ctx.cost_tracker = Some(CostTracker::new(calculator.clone()));
 
+    // Build the analysis prompt (needed for accurate cost estimation)
+    let prompt = build_analysis_prompt(&ctx.config.rule_type, ctx.config.description.as_deref());
+    let prompt_tokens = tokenizer.count_tokens(&prompt);
+
     // Estimate cost
     // For multi-chunk, estimate includes: N chunk analyses + 1 merge
     let estimated_output_tokens = chunks.len() * 4096; // Approximate output per chunk
-    let total_input_tokens: usize = chunks.iter().map(|c| c.token_count).sum();
-    let cost_estimate = calculator.estimate_cost(total_input_tokens, estimated_output_tokens);
+    let total_chunk_tokens: usize = chunks.iter().map(|c| c.token_count).sum();
+    // Include prompt tokens: for multi-chunk, prompt is sent with each chunk
+    let estimated_input_tokens = if chunks.len() == 1 {
+        total_chunk_tokens + prompt_tokens
+    } else {
+        total_chunk_tokens + (prompt_tokens * chunks.len())
+    };
+    let cost_estimate = calculator.estimate_cost(estimated_input_tokens, estimated_output_tokens);
 
     // Show cost estimation and confirm (unless --no-confirm)
     if !ctx.config.no_confirm {
-        let confirmed = confirm_cost(&cost_estimate, chunks.len(), ctx.config.quiet)?;
+        let confirmed = confirm_cost(&cost_estimate, chunks.len(), ctx.config.quiet).await?;
         if !confirmed {
             tracing::info!("User cancelled operation");
             return Ok(());
@@ -405,9 +413,6 @@ pub async fn run(config: MergedConfig) -> Result<()> {
             cost_estimate.total_cost, cost_estimate.input_tokens, cost_estimate.output_tokens
         );
     }
-
-    // Build the analysis prompt
-    let prompt = build_analysis_prompt(&ctx.config.rule_type, ctx.config.description.as_deref());
 
     // Perform the analysis
     let analysis_result = perform_analysis(&mut ctx, &client, chunks, &prompt).await?;
@@ -517,9 +522,11 @@ fn display_dry_run_config(config: &MergedConfig) {
 /// Returns an error if the tokenizer cannot be created.
 fn get_tokenizer(provider: &str, model: Option<&str>) -> Result<Box<dyn Tokenizer>> {
     match provider.to_lowercase().as_str() {
+        #[cfg(feature = "anthropic")]
         "anthropic" => Ok(Box::new(
             AnthropicTokenizer::new().context("Failed to create Anthropic tokenizer")?,
         )),
+        #[cfg(feature = "openai")]
         "openai" => {
             let tokenizer_model = model
                 .map(TokenizerModel::from_model_name)
@@ -628,7 +635,7 @@ fn get_context_limit(provider: &str, _model: Option<&str>) -> usize {
 /// # Returns
 ///
 /// `true` if the user confirms, `false` otherwise.
-fn confirm_cost(
+async fn confirm_cost(
     estimate: &llm::cost::CostEstimate,
     num_chunks: usize,
     quiet: bool,
@@ -659,12 +666,19 @@ fn confirm_cost(
     }
     println!();
 
-    print!("Proceed with LLM analysis? [y/N] ");
-    io::stdout().flush().context("Failed to flush stdout")?;
+    let mut stdout = tokio::io::stdout();
+    stdout
+        .write_all(b"Proceed with LLM analysis? [y/N] ")
+        .await
+        .context("Failed to write to stdout")?;
+    stdout.flush().await.context("Failed to flush stdout")?;
 
+    let stdin = tokio::io::stdin();
+    let mut reader = BufReader::new(stdin);
     let mut input = String::new();
-    io::stdin()
+    reader
         .read_line(&mut input)
+        .await
         .context("Failed to read user input")?;
 
     let confirmed = matches!(input.trim().to_lowercase().as_str(), "y" | "yes");

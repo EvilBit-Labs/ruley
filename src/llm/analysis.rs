@@ -59,7 +59,6 @@ impl ChunkResult {
 
 /// Configuration options for chunk analysis.
 #[derive(Debug, Clone)]
-#[must_use]
 pub struct AnalysisOptions {
     /// Maximum tokens for LLM response per chunk.
     pub max_tokens: Option<usize>,

@@ -103,14 +103,13 @@ pub struct CostBreakdown {
 ///
 /// # Pricing Convention
 ///
-/// The `Pricing` struct uses dollars per 1K tokens:
-/// - Anthropic Claude Sonnet: `input_per_1k: 3.0` ($3.00/1K tokens), `output_per_1k: 15.0` ($15.00/1K tokens)
-/// - OpenAI GPT-4o: `input_per_1k: 2.5` ($2.50/1K tokens), `output_per_1k: 10.0` ($10.00/1K tokens)
+/// The `Pricing` struct uses dollars per 1K tokens. Example realistic values:
+/// - Anthropic Claude Sonnet 4.5: `input_per_1k: 0.003` ($0.003/1K tokens), `output_per_1k: 0.015` ($0.015/1K tokens)
+/// - OpenAI GPT-4o: `input_per_1k: 0.005` ($0.005/1K tokens), `output_per_1k: 0.015` ($0.015/1K tokens)
 /// - Ollama (local): `input_per_1k: 0.0`, `output_per_1k: 0.0` (free)
 ///
-/// Note: These are placeholder values for demonstration. Actual API pricing
-/// varies by model and may be significantly lower (e.g., $3/1M instead of $3/1K).
-/// Consult the provider's pricing page for accurate rates.
+/// Note: Provider pricing changes over time and varies by model and region.
+/// Always consult the provider's official pricing page for up-to-date rates.
 ///
 /// # Example
 ///
@@ -119,8 +118,8 @@ pub struct CostBreakdown {
 /// use ruley::llm::provider::Pricing;
 ///
 /// let pricing = Pricing {
-///     input_per_1k: 3.0,
-///     output_per_1k: 15.0,
+///     input_per_1k: 0.003,
+///     output_per_1k: 0.015,
 /// };
 /// let calculator = CostCalculator::new(pricing);
 ///

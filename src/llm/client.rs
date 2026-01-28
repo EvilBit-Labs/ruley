@@ -244,7 +244,8 @@ impl LLMClient {
             }
         }
 
-        // This should only be reached if max_retries is 0 and the first attempt fails
+        // Defensive fallback: in normal operation, all error paths return early within the loop.
+        // This provides a safe fallback in case of unexpected control flow.
         Err(last_error.unwrap_or_else(|| RuleyError::Provider {
             provider: self.provider.model().to_string(),
             message: "Unknown error during retry".to_string(),

@@ -44,7 +44,13 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 use cli::config::{ChunkingConfig, ProvidersConfig};
+use llm::chunker::{Chunk, ChunkConfig};
+use llm::client::LLMClient;
+use llm::cost::{CostCalculator, CostTracker};
+use llm::provider::LLMProvider;
+use llm::tokenizer::{AnthropicTokenizer, TiktokenTokenizer, Tokenizer, TokenizerModel};
 use std::collections::HashMap;
+use std::io::{self, Write};
 use std::path::PathBuf;
 
 /// Initialize logging based on verbosity level.
@@ -218,6 +224,10 @@ pub struct PipelineContext {
     pub progress: ProgressTracker,
     /// Compressed codebase data
     pub compressed_codebase: Option<packer::CompressedCodebase>,
+    /// Analysis result from LLM (populated in Stage 4)
+    pub analysis_result: Option<String>,
+    /// Cost tracking for LLM operations
+    pub cost_tracker: Option<CostTracker>,
 }
 
 impl PipelineContext {
@@ -230,6 +240,8 @@ impl PipelineContext {
             temp_files: TempFileRefs::new(),
             progress: ProgressTracker::new(),
             compressed_codebase: None,
+            analysis_result: None,
+            cost_tracker: None,
         }
     }
 
@@ -322,7 +334,100 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 4: Analyzing
     ctx.transition_to(PipelineStage::Analyzing);
-    // TODO: Implement LLM analysis
+
+    // Get the compressed codebase for analysis
+    let codebase = ctx
+        .compressed_codebase
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("No compressed codebase available for analysis"))?;
+
+    // Get the tokenizer for the provider
+    let tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
+
+    // Calculate total tokens in the codebase
+    let total_tokens = llm::tokenizer::calculate_tokens(codebase, tokenizer.as_ref());
+    tracing::info!("Codebase contains {} tokens", total_tokens);
+
+    // Get context limit for the provider
+    let context_limit = get_context_limit(&ctx.config.provider, ctx.config.model.as_deref());
+
+    // Determine chunk configuration
+    let chunk_config = if let Some(ref chunking) = ctx.config.chunking {
+        ChunkConfig::new(
+            chunking.chunk_size.unwrap_or(ctx.config.chunk_size),
+            chunking.overlap.unwrap_or(ctx.config.chunk_size / 10),
+        )
+        .context("Invalid chunking configuration")?
+    } else {
+        ChunkConfig::with_chunk_size(ctx.config.chunk_size)
+            .context("Invalid chunk size configuration")?
+    };
+
+    // Chunk the codebase if needed
+    let chunks = if total_tokens > context_limit {
+        tracing::info!(
+            "Codebase exceeds context limit ({} > {}), chunking required",
+            total_tokens,
+            context_limit
+        );
+        llm::chunker::chunk_codebase(codebase, &chunk_config, tokenizer.as_ref())
+            .context("Failed to chunk codebase")?
+    } else {
+        vec![Chunk::from_codebase(codebase, tokenizer.as_ref())]
+    };
+
+    tracing::info!("Prepared {} chunk(s) for analysis", chunks.len());
+
+    // Create LLM client
+    let client = create_llm_client(&ctx.config)?;
+
+    // Initialize cost tracker
+    let pricing = client.pricing();
+    let calculator = CostCalculator::new(pricing);
+    ctx.cost_tracker = Some(CostTracker::new(calculator.clone()));
+
+    // Estimate cost
+    // For multi-chunk, estimate includes: N chunk analyses + 1 merge
+    let estimated_output_tokens = chunks.len() * 4096; // Approximate output per chunk
+    let total_input_tokens: usize = chunks.iter().map(|c| c.token_count).sum();
+    let cost_estimate = calculator.estimate_cost(total_input_tokens, estimated_output_tokens);
+
+    // Show cost estimation and confirm (unless --no-confirm)
+    if !ctx.config.no_confirm {
+        let confirmed = confirm_cost(&cost_estimate, chunks.len(), ctx.config.quiet)?;
+        if !confirmed {
+            tracing::info!("User cancelled operation");
+            return Ok(());
+        }
+    } else if !ctx.config.quiet {
+        println!(
+            "Estimated cost: ${:.4} ({} input tokens, ~{} output tokens)",
+            cost_estimate.total_cost, cost_estimate.input_tokens, cost_estimate.output_tokens
+        );
+    }
+
+    // Build the analysis prompt
+    let prompt = build_analysis_prompt(&ctx.config.rule_type, ctx.config.description.as_deref());
+
+    // Perform the analysis
+    let analysis_result = perform_analysis(&mut ctx, &client, chunks, &prompt).await?;
+
+    tracing::info!("Analysis complete ({} characters)", analysis_result.len());
+
+    // Store the analysis result for the next stage
+    ctx.analysis_result = Some(analysis_result);
+
+    // Log cost summary if tracking
+    if let Some(ref tracker) = ctx.cost_tracker {
+        let summary = tracker.summary();
+        tracing::info!(
+            "LLM cost: ${:.4} ({} operations, {} input tokens, {} output tokens)",
+            summary.total_cost,
+            summary.operation_count,
+            summary.total_input_tokens,
+            summary.total_output_tokens
+        );
+    }
 
     // Stage 5: Formatting
     ctx.transition_to(PipelineStage::Formatting);
@@ -396,4 +501,246 @@ fn display_dry_run_config(config: &MergedConfig) {
     println!("No Confirm:   {}", config.no_confirm);
     println!();
     println!("No LLM calls will be made.");
+}
+
+/// Get the appropriate tokenizer for the given provider.
+///
+/// Returns a boxed tokenizer that matches the provider's tokenization scheme.
+///
+/// # Arguments
+///
+/// * `provider` - The LLM provider name (e.g., "anthropic", "openai")
+/// * `model` - Optional model name for more precise tokenizer selection
+///
+/// # Errors
+///
+/// Returns an error if the tokenizer cannot be created.
+fn get_tokenizer(provider: &str, model: Option<&str>) -> Result<Box<dyn Tokenizer>> {
+    match provider.to_lowercase().as_str() {
+        "anthropic" => Ok(Box::new(
+            AnthropicTokenizer::new().context("Failed to create Anthropic tokenizer")?,
+        )),
+        "openai" => {
+            let tokenizer_model = model
+                .map(TokenizerModel::from_model_name)
+                .unwrap_or(TokenizerModel::Gpt4o);
+            Ok(Box::new(
+                TiktokenTokenizer::new(tokenizer_model)
+                    .context("Failed to create OpenAI tokenizer")?,
+            ))
+        }
+        // Default to cl100k_base for other providers (reasonable approximation)
+        _ => Ok(Box::new(
+            TiktokenTokenizer::new(TokenizerModel::Gpt4)
+                .context("Failed to create default tokenizer")?,
+        )),
+    }
+}
+
+/// Create an LLM client based on the configuration.
+///
+/// # Arguments
+///
+/// * `config` - The merged configuration containing provider settings
+///
+/// # Errors
+///
+/// Returns an error if the provider is not supported or cannot be initialized.
+fn create_llm_client(config: &MergedConfig) -> Result<LLMClient> {
+    let provider: Box<dyn LLMProvider> = match config.provider.to_lowercase().as_str() {
+        #[cfg(feature = "anthropic")]
+        "anthropic" => {
+            use llm::providers::anthropic::AnthropicProvider;
+
+            let api_key = std::env::var("ANTHROPIC_API_KEY")
+                .context("ANTHROPIC_API_KEY environment variable not set")?;
+
+            let model = config
+                .model
+                .clone()
+                .or_else(|| {
+                    config
+                        .providers
+                        .anthropic
+                        .as_ref()
+                        .and_then(|p| p.model.clone())
+                })
+                .unwrap_or_else(|| "claude-sonnet-4-5-20250929".to_string());
+
+            Box::new(
+                AnthropicProvider::new(api_key, model)
+                    .context("Failed to create Anthropic provider")?,
+            )
+        }
+        #[cfg(feature = "openai")]
+        "openai" => {
+            use llm::providers::openai::OpenAIProvider;
+
+            let api_key = std::env::var("OPENAI_API_KEY")
+                .context("OPENAI_API_KEY environment variable not set")?;
+
+            let model = config
+                .model
+                .clone()
+                .or_else(|| {
+                    config
+                        .providers
+                        .openai
+                        .as_ref()
+                        .and_then(|p| p.model.clone())
+                })
+                .unwrap_or_else(|| "gpt-4o".to_string());
+
+            Box::new(
+                OpenAIProvider::new(api_key, model).context("Failed to create OpenAI provider")?,
+            )
+        }
+        provider => {
+            return Err(anyhow::anyhow!(
+                "Unsupported provider '{}'. Supported providers: anthropic, openai",
+                provider
+            ));
+        }
+    };
+
+    Ok(LLMClient::new(provider))
+}
+
+/// Get the context limit for the given provider and model.
+///
+/// Returns a reasonable default context limit for the provider.
+fn get_context_limit(provider: &str, _model: Option<&str>) -> usize {
+    match provider.to_lowercase().as_str() {
+        "anthropic" => 200_000, // Claude models support 200K context
+        "openai" => 128_000,    // GPT-4o supports 128K context
+        _ => 100_000,           // Conservative default
+    }
+}
+
+/// Display cost estimation and prompt for confirmation.
+///
+/// # Arguments
+///
+/// * `estimate` - The cost estimate to display
+/// * `num_chunks` - Number of chunks that will be processed
+/// * `quiet` - Whether to suppress output
+///
+/// # Returns
+///
+/// `true` if the user confirms, `false` otherwise.
+fn confirm_cost(
+    estimate: &llm::cost::CostEstimate,
+    num_chunks: usize,
+    quiet: bool,
+) -> Result<bool> {
+    if quiet {
+        return Ok(true);
+    }
+
+    println!();
+    println!("Cost Estimation");
+    println!("===============");
+    println!(
+        "Input tokens:  {:>10} (${:.4})",
+        estimate.input_tokens, estimate.input_cost
+    );
+    println!(
+        "Output tokens: {:>10} (${:.4}) [estimated]",
+        estimate.output_tokens, estimate.output_cost
+    );
+    println!(
+        "Total tokens:  {:>10}",
+        estimate.input_tokens + estimate.output_tokens
+    );
+    println!("----------------------------");
+    println!("Estimated cost: ${:.4}", estimate.total_cost);
+    if num_chunks > 1 {
+        println!("Chunks to process: {}", num_chunks);
+    }
+    println!();
+
+    print!("Proceed with LLM analysis? [y/N] ");
+    io::stdout().flush().context("Failed to flush stdout")?;
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .context("Failed to read user input")?;
+
+    let confirmed = matches!(input.trim().to_lowercase().as_str(), "y" | "yes");
+    Ok(confirmed)
+}
+
+/// Build the analysis prompt from the rule type and optional description.
+fn build_analysis_prompt(rule_type: &str, description: Option<&str>) -> String {
+    let base = generator::prompts::base_prompt();
+
+    let mut prompt = base.to_string();
+
+    if let Some(desc) = description {
+        prompt.push_str("\n\nAdditional context from user:\n");
+        prompt.push_str(desc);
+    }
+
+    prompt.push_str(&format!(
+        "\n\nGenerate rules appropriate for a '{}' rule type.",
+        rule_type
+    ));
+
+    prompt
+}
+
+/// Perform LLM analysis on the codebase.
+///
+/// Handles both single-chunk and multi-chunk analysis paths.
+///
+/// # Arguments
+///
+/// * `ctx` - The pipeline context with compressed codebase
+/// * `client` - The LLM client to use
+/// * `chunks` - The chunks to analyze
+/// * `prompt` - The analysis prompt
+///
+/// # Returns
+///
+/// The analysis result as a string.
+async fn perform_analysis(
+    ctx: &mut PipelineContext,
+    client: &LLMClient,
+    chunks: Vec<Chunk>,
+    prompt: &str,
+) -> Result<String> {
+    let num_chunks = chunks.len();
+
+    if num_chunks == 1 {
+        tracing::info!("Analyzing codebase (single chunk, no merge required)");
+        let result = llm::analysis::analyze_chunked(chunks, prompt, client)
+            .await
+            .context("Failed to analyze codebase")?;
+
+        // Track the operation cost
+        if let Some(ref mut tracker) = ctx.cost_tracker {
+            // Estimate output tokens based on result length (rough approximation)
+            let tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
+            let output_tokens = tokenizer.count_tokens(&result);
+            let input_tokens = tokenizer.count_tokens(prompt);
+            tracker.add_operation("analysis", input_tokens, output_tokens);
+        }
+
+        Ok(result)
+    } else {
+        tracing::info!(
+            "Analyzing codebase in {} chunks with merge step",
+            num_chunks
+        );
+        let result = llm::analysis::analyze_chunked(chunks, prompt, client)
+            .await
+            .context("Failed to analyze chunked codebase")?;
+
+        // For chunked analysis, the analyze_chunked function handles tracking internally
+        // We just report the final result
+        tracing::info!("Chunk analysis and merge completed");
+
+        Ok(result)
+    }
 }

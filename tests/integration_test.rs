@@ -721,6 +721,7 @@ mod fallback_tests {
     #[test]
     #[cfg(not(feature = "compression-typescript"))]
     fn test_tree_sitter_fallback_when_disabled() {
+        use ruley::packer::compress::TreeSitterCompressor;
         let compressor = TreeSitterCompressor;
         let source = "function test(): void {}";
 

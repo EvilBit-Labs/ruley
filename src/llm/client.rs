@@ -39,7 +39,7 @@ impl Default for RetryConfig {
         Self {
             max_retries: 3,
             initial_delay_ms: 1000,
-            max_delay_ms: 30000,
+            max_delay_ms: 60000,
             jitter: true,
         }
     }
@@ -333,7 +333,7 @@ mod tests {
         let config = RetryConfig::default();
         assert_eq!(config.max_retries, 3);
         assert_eq!(config.initial_delay_ms, 1000);
-        assert_eq!(config.max_delay_ms, 30000);
+        assert_eq!(config.max_delay_ms, 60000);
         assert!(config.jitter);
     }
 

@@ -59,6 +59,7 @@ impl ChunkResult {
 
 /// Configuration options for chunk analysis.
 #[derive(Debug, Clone)]
+#[must_use]
 pub struct AnalysisOptions {
     /// Maximum tokens for LLM response per chunk.
     pub max_tokens: Option<usize>,
@@ -286,8 +287,8 @@ pub async fn merge_chunk_results(
     }
 
     // Single result: no merge needed
-    if chunk_results.len() == 1 {
-        return Ok(chunk_results.into_iter().next().unwrap().analysis);
+    if let [single] = &chunk_results[..] {
+        return Ok(single.analysis.clone());
     }
 
     info!(
@@ -303,7 +304,7 @@ pub async fn merge_chunk_results(
 
     // Use higher max_tokens for merge since we're combining multiple analyses
     let merge_options = CompletionOptions {
-        max_tokens: options.max_tokens.map(|t| t * 2),
+        max_tokens: options.max_tokens.map(|t| t.saturating_mul(2)),
         temperature: options.temperature,
     };
 

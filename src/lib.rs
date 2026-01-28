@@ -48,7 +48,9 @@ use llm::chunker::{Chunk, ChunkConfig};
 use llm::client::LLMClient;
 use llm::cost::{CostCalculator, CostTracker};
 use llm::provider::LLMProvider;
-use llm::tokenizer::{AnthropicTokenizer, TiktokenTokenizer, Tokenizer, TokenizerModel};
+#[cfg(feature = "anthropic")]
+use llm::tokenizer::AnthropicTokenizer;
+use llm::tokenizer::{TiktokenTokenizer, Tokenizer, TokenizerModel};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -520,6 +522,7 @@ fn display_dry_run_config(config: &MergedConfig) {
 /// # Errors
 ///
 /// Returns an error if the tokenizer cannot be created.
+#[allow(unused_variables)]
 fn get_tokenizer(provider: &str, model: Option<&str>) -> Result<Box<dyn Tokenizer>> {
     match provider.to_lowercase().as_str() {
         #[cfg(feature = "anthropic")]
@@ -553,6 +556,7 @@ fn get_tokenizer(provider: &str, model: Option<&str>) -> Result<Box<dyn Tokenize
 /// # Errors
 ///
 /// Returns an error if the provider is not supported or cannot be initialized.
+#[allow(unreachable_code, unused_variables)]
 fn create_llm_client(config: &MergedConfig) -> Result<LLMClient> {
     let provider: Box<dyn LLMProvider> = match config.provider.to_lowercase().as_str() {
         #[cfg(feature = "anthropic")]

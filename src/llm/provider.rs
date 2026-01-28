@@ -8,7 +8,7 @@ pub struct Message {
     pub content: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CompletionOptions {
     pub max_tokens: Option<usize>,
     pub temperature: Option<f32>,

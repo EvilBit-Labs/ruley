@@ -22,6 +22,27 @@ pub enum Language {
     Unknown,
 }
 
+impl std::fmt::Display for Language {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::TypeScript => "typescript",
+            Self::Tsx => "tsx",
+            Self::JavaScript => "javascript",
+            Self::Jsx => "jsx",
+            Self::Python => "python",
+            Self::Rust => "rust",
+            Self::Go => "go",
+            Self::Java => "java",
+            Self::C => "c",
+            Self::Cpp => "cpp",
+            Self::Ruby => "ruby",
+            Self::Php => "php",
+            Self::Unknown => "unknown",
+        };
+        write!(f, "{}", name)
+    }
+}
+
 pub trait Compressor {
     fn compress(&self, source: &str, language: Language) -> Result<String, RuleyError>;
     fn compression_ratio(&self) -> f32;

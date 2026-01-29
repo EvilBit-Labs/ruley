@@ -1,26 +1,26 @@
-Convert the following codebase analysis into GitHub Copilot instructions.
+Convert the following codebase analysis into Aider conventions file format.
 
 Analysis: <analysis> {{analysis}} </analysis>
 
 Format Requirements:
 
-1. Use Markdown format suitable for .github/copilot-instructions.md
-2. Focus on patterns that guide code completion
+1. Use Markdown format suitable for .aider.conf.yml or CONVENTIONS.md
+2. Focus on patterns that guide code generation
 3. Be concise but specific
 
 Structure the output as follows:
 
-# Copilot Instructions
+# Aider Conventions
 
 ## Project Context
 
-[Brief project description to give Copilot context]
+[Brief project description to give Aider context]
+
+## Language: {{primary_language}}
+
+[Language-specific conventions and idioms]
 
 ## Code Style
-
-### Language: {{primary_language}}
-
-[Language-specific conventions]
 
 ### Formatting
 
@@ -68,8 +68,4 @@ Instead:
 
 [How imports should be organized]
 
-## Comments and Documentation
-
-[Documentation standards]
-
-Output the complete copilot-instructions.md file content, ready to save to .github/copilot-instructions.md
+Output the complete conventions file content ready for Aider configuration.

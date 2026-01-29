@@ -42,6 +42,21 @@ pub fn smart_merge_prompt() -> &'static str {
     include_str!("../../prompts/smart_merge.md")
 }
 
+/// Load the Windsurf format refinement prompt template.
+pub fn windsurf_prompt() -> &'static str {
+    include_str!("../../prompts/windsurf.md")
+}
+
+/// Load the Aider format refinement prompt template.
+pub fn aider_prompt() -> &'static str {
+    include_str!("../../prompts/aider.md")
+}
+
+/// Load the generic format refinement prompt template.
+pub fn generic_prompt() -> &'static str {
+    include_str!("../../prompts/generic.md")
+}
+
 /// Build the analysis prompt for initial codebase analysis.
 ///
 /// This function constructs a comprehensive prompt that includes:
@@ -105,12 +120,12 @@ pub fn build_analysis_prompt(codebase: &CompressedCodebase, focus: Option<&str>)
 /// Build a refinement prompt for format-specific rule generation.
 ///
 /// Takes the raw analysis output and converts it to a specific format
-/// (Cursor .mdc, Claude CLAUDE.md, or Copilot instructions).
+/// (Cursor .mdc, Claude CLAUDE.md, Copilot, Windsurf, Aider, or generic).
 ///
 /// # Arguments
 ///
 /// * `analysis` - The raw analysis from the initial LLM call
-/// * `format` - The target format ("cursor", "claude", "copilot")
+/// * `format` - The target format ("cursor", "claude", "copilot", "windsurf", "aider", "generic")
 /// * `rule_type` - Optional rule type hint (e.g., "always", "auto", "manual")
 ///
 /// # Returns
@@ -121,7 +136,10 @@ pub fn build_refinement_prompt(analysis: &str, format: &str, rule_type: Option<&
         "cursor" => cursor_prompt(),
         "claude" => claude_prompt(),
         "copilot" => copilot_prompt(),
-        _ => cursor_prompt(), // Default to cursor format
+        "windsurf" => windsurf_prompt(),
+        "aider" => aider_prompt(),
+        "generic" => generic_prompt(),
+        _ => generic_prompt(), // Default to generic format
     };
 
     let rule_type_str = rule_type.unwrap_or("auto");
@@ -161,9 +179,16 @@ pub fn build_smart_merge_prompt(existing_rules: &str, new_analysis: &str) -> Str
 /// Format the compressed codebase content for inclusion in prompts.
 ///
 /// Creates a structured representation of all files with their paths
-/// and compressed content.
+/// and compressed content. Pre-allocates capacity to avoid reallocations
+/// for large codebases.
 fn format_codebase_content(codebase: &CompressedCodebase) -> String {
-    let mut content = String::new();
+    // Estimate capacity: ~50 bytes overhead per file (separators, path) + content
+    let estimated_size: usize = codebase
+        .files
+        .iter()
+        .map(|f| f.compressed_content.len() + 50)
+        .sum();
+    let mut content = String::with_capacity(estimated_size);
 
     for file in &codebase.files {
         content.push_str("--- ");

@@ -219,8 +219,11 @@ impl GeneratedRules {
 ///
 /// # Errors
 ///
-/// This function is designed to be graceful - it will return the raw
-/// response even if structured parsing fails.
+/// Currently this function always succeeds, returning the raw response.
+/// The `Result` return type is retained for future compatibility when
+/// structured JSON parsing may be added, which could fail on malformed
+/// responses. This design allows callers to use `?` operator consistently
+/// and makes the API forward-compatible.
 ///
 /// # Example
 ///

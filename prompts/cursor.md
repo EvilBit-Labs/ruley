@@ -39,13 +39,13 @@ alwaysApply: [true/false]
 
 ### Valid Examples
 
-```[language]
+```{{primary_language}}
 // Example of correct pattern
 ```
 
 ### Invalid Examples
 
-```[language]
+```{{primary_language}}
 // Example of what to avoid
 ```
 

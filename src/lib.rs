@@ -469,6 +469,9 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         ctx.config.format.len()
     );
 
+    // Create tokenizer once for cost tracking (avoid recreating per format)
+    let refinement_tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
+
     for format in &ctx.config.format {
         tracing::info!("Generating {} format rules", format);
 
@@ -496,8 +499,7 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
         // Track cost for this refinement call
         if let Some(ref mut tracker) = ctx.cost_tracker {
-            let tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
-            let input_tokens = tokenizer.count_tokens(&refinement_prompt);
+            let input_tokens = refinement_tokenizer.count_tokens(&refinement_prompt);
             let output_tokens = response.tokens_used;
             tracker.add_operation(
                 format!("format_refinement_{}", format),

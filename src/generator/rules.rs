@@ -251,11 +251,17 @@ pub fn parse_analysis_response(
 /// - Cursor: ApplyIntelligently (context-aware)
 /// - Claude: AlwaysApply (project-wide instructions)
 /// - Copilot: ApplyIntelligently (code completion context)
+/// - Windsurf: ApplyIntelligently (context-aware)
+/// - Aider: ApplyIntelligently (code-focused)
+/// - Generic: ApplyIntelligently (universal default)
 pub fn get_default_rule_type(format: &str) -> RuleType {
     match format.to_lowercase().as_str() {
         "cursor" => RuleType::ApplyIntelligently,
         "claude" => RuleType::AlwaysApply,
         "copilot" => RuleType::ApplyIntelligently,
+        "windsurf" => RuleType::ApplyIntelligently,
+        "aider" => RuleType::ApplyIntelligently,
+        "generic" => RuleType::ApplyIntelligently,
         _ => RuleType::ApplyIntelligently,
     }
 }
@@ -453,6 +459,15 @@ mod tests {
         assert_eq!(get_default_rule_type("claude"), RuleType::AlwaysApply);
         assert_eq!(
             get_default_rule_type("copilot"),
+            RuleType::ApplyIntelligently
+        );
+        assert_eq!(
+            get_default_rule_type("windsurf"),
+            RuleType::ApplyIntelligently
+        );
+        assert_eq!(get_default_rule_type("aider"), RuleType::ApplyIntelligently);
+        assert_eq!(
+            get_default_rule_type("generic"),
             RuleType::ApplyIntelligently
         );
     }

@@ -450,7 +450,86 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 5: Formatting
     ctx.transition_to(PipelineStage::Formatting);
-    // TODO: Implement output formatting
+
+    // Get the analysis result for refinement
+    let analysis = ctx
+        .analysis_result
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("No analysis result available for formatting"))?;
+
+    // Get mutable reference to generated rules
+    let rules = ctx
+        .generated_rules
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("No generated rules available for formatting"))?;
+
+    // Process each output format
+    tracing::info!(
+        "Generating format-specific rules for {} format(s)",
+        ctx.config.format.len()
+    );
+
+    for format in &ctx.config.format {
+        tracing::info!("Generating {} format rules", format);
+
+        // Determine rule type for this format
+        let rule_type_str = if ctx.config.rule_type.is_empty() {
+            None
+        } else {
+            Some(ctx.config.rule_type.as_str())
+        };
+
+        // Build refinement prompt for this format
+        let refinement_prompt = generator::build_refinement_prompt(analysis, format, rule_type_str);
+
+        // Create messages for LLM call
+        let messages = vec![llm::provider::Message {
+            role: "user".to_string(),
+            content: refinement_prompt.clone(),
+        }];
+
+        // Call LLM to generate format-specific rules
+        let response = client
+            .complete(&messages, &llm::provider::CompletionOptions::default())
+            .await
+            .with_context(|| format!("Failed to generate {} format rules", format))?;
+
+        // Track cost for this refinement call
+        if let Some(ref mut tracker) = ctx.cost_tracker {
+            let tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
+            let input_tokens = tokenizer.count_tokens(&refinement_prompt);
+            let output_tokens = response.tokens_used;
+            tracker.add_operation(
+                format!("format_refinement_{}", format),
+                input_tokens,
+                output_tokens,
+            );
+        }
+
+        // Determine rule type for this format
+        let rule_type: generator::RuleType = rule_type_str
+            .map(|s| s.parse().unwrap_or_default())
+            .unwrap_or_else(|| generator::get_default_rule_type(format));
+
+        // Create formatted rules and add to the collection
+        let formatted_rules =
+            generator::FormattedRules::with_rule_type(format, response.content, rule_type);
+        rules.add_format(formatted_rules);
+
+        tracing::info!("Generated {} format rules successfully", format);
+    }
+
+    // Log final cost summary after all formats processed
+    if let Some(ref tracker) = ctx.cost_tracker {
+        let summary = tracker.summary();
+        tracing::info!(
+            "Total LLM cost after formatting: ${:.4} ({} operations, {} input tokens, {} output tokens)",
+            summary.total_cost,
+            summary.operation_count,
+            summary.total_input_tokens,
+            summary.total_output_tokens
+        );
+    }
 
     // Stage 6: Writing
     ctx.transition_to(PipelineStage::Writing);

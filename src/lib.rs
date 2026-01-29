@@ -228,6 +228,8 @@ pub struct PipelineContext {
     pub compressed_codebase: Option<packer::CompressedCodebase>,
     /// Analysis result from LLM (populated in Stage 4)
     pub analysis_result: Option<String>,
+    /// Generated rules from analysis (populated in Stage 4)
+    pub generated_rules: Option<generator::GeneratedRules>,
     /// Cost tracking for LLM operations
     pub cost_tracker: Option<CostTracker>,
 }
@@ -243,6 +245,7 @@ impl PipelineContext {
             progress: ProgressTracker::new(),
             compressed_codebase: None,
             analysis_result: None,
+            generated_rules: None,
             cost_tracker: None,
         }
     }
@@ -387,7 +390,7 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     ctx.cost_tracker = Some(CostTracker::new(calculator.clone()));
 
     // Build the analysis prompt (needed for accurate cost estimation)
-    let prompt = build_analysis_prompt(&ctx.config.rule_type, ctx.config.description.as_deref());
+    let prompt = generator::build_analysis_prompt(codebase, ctx.config.description.as_deref());
     let prompt_tokens = tokenizer.count_tokens(&prompt);
 
     // Estimate cost
@@ -421,8 +424,17 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     tracing::info!("Analysis complete ({} characters)", analysis_result.len());
 
-    // Store the analysis result for the next stage
+    // Parse the analysis into GeneratedRules structure
+    let generated_rules = generator::parse_analysis_response(
+        &analysis_result,
+        &ctx.config.provider,
+        ctx.config.model.as_deref().unwrap_or("unknown"),
+    )
+    .context("Failed to parse analysis response")?;
+
+    // Store the analysis result and generated rules for the next stage
     ctx.analysis_result = Some(analysis_result);
+    ctx.generated_rules = Some(generated_rules);
 
     // Log cost summary if tracking
     if let Some(ref tracker) = ctx.cost_tracker {
@@ -438,7 +450,97 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 5: Formatting
     ctx.transition_to(PipelineStage::Formatting);
-    // TODO: Implement output formatting
+
+    // Get the analysis result for refinement
+    let analysis = ctx
+        .analysis_result
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("No analysis result available for formatting"))?;
+
+    // Get mutable reference to generated rules
+    let rules = ctx
+        .generated_rules
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("No generated rules available for formatting"))?;
+
+    // Process each output format
+    tracing::info!(
+        "Generating format-specific rules for {} format(s)",
+        ctx.config.format.len()
+    );
+
+    // Create tokenizer once for cost tracking (avoid recreating per format)
+    let refinement_tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
+
+    for format in &ctx.config.format {
+        tracing::info!("Generating {} format rules", format);
+
+        // Determine rule type for this format
+        let rule_type_str = if ctx.config.rule_type.is_empty() {
+            None
+        } else {
+            Some(ctx.config.rule_type.as_str())
+        };
+
+        // Build refinement prompt for this format
+        let refinement_prompt = generator::build_refinement_prompt(analysis, format, rule_type_str);
+
+        // Create messages for LLM call
+        let messages = vec![llm::provider::Message {
+            role: "user".to_string(),
+            content: refinement_prompt.clone(),
+        }];
+
+        // Call LLM to generate format-specific rules
+        let response = client
+            .complete(&messages, &llm::provider::CompletionOptions::default())
+            .await
+            .with_context(|| format!("Failed to generate {} format rules", format))?;
+
+        // Track cost for this refinement call
+        if let Some(ref mut tracker) = ctx.cost_tracker {
+            let input_tokens = refinement_tokenizer.count_tokens(&refinement_prompt);
+            let output_tokens = response.tokens_used;
+            tracker.add_operation(
+                format!("format_refinement_{}", format),
+                input_tokens,
+                output_tokens,
+            );
+        }
+
+        // Determine rule type for this format
+        let rule_type: generator::RuleType = rule_type_str
+            .map(|s| {
+                s.parse().unwrap_or_else(|_| {
+                    tracing::warn!(
+                        "Invalid rule_type '{}', using default for format '{}'",
+                        s,
+                        format
+                    );
+                    generator::get_default_rule_type(format)
+                })
+            })
+            .unwrap_or_else(|| generator::get_default_rule_type(format));
+
+        // Create formatted rules and add to the collection
+        let formatted_rules =
+            generator::FormattedRules::with_rule_type(format, response.content, rule_type);
+        rules.add_format(formatted_rules);
+
+        tracing::info!("Generated {} format rules successfully", format);
+    }
+
+    // Log final cost summary after all formats processed
+    if let Some(ref tracker) = ctx.cost_tracker {
+        let summary = tracker.summary();
+        tracing::info!(
+            "Total LLM cost after formatting: ${:.4} ({} operations, {} input tokens, {} output tokens)",
+            summary.total_cost,
+            summary.operation_count,
+            summary.total_input_tokens,
+            summary.total_output_tokens
+        );
+    }
 
     // Stage 6: Writing
     ctx.transition_to(PipelineStage::Writing);
@@ -687,25 +789,6 @@ async fn confirm_cost(
 
     let confirmed = matches!(input.trim().to_lowercase().as_str(), "y" | "yes");
     Ok(confirmed)
-}
-
-/// Build the analysis prompt from the rule type and optional description.
-fn build_analysis_prompt(rule_type: &str, description: Option<&str>) -> String {
-    let base = generator::prompts::base_prompt();
-
-    let mut prompt = base.to_string();
-
-    if let Some(desc) = description {
-        prompt.push_str("\n\nAdditional context from user:\n");
-        prompt.push_str(desc);
-    }
-
-    prompt.push_str(&format!(
-        "\n\nGenerate rules appropriate for a '{}' rule type.",
-        rule_type
-    ));
-
-    prompt
 }
 
 /// Perform LLM analysis on the codebase.

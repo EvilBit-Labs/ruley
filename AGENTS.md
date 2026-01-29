@@ -22,6 +22,12 @@ This document provides unified guidance for AI agents working on the ruley proje
 5. **output/**: Multi-format output formatters (Cursor, Claude, Copilot, Windsurf, Aider, etc.)
 6. **utils/**: Shared utilities (error types, progress bars)
 
+### Prompt Templates
+
+- **Location**: `prompts/*.md` - excluded from mdformat (uses `{{placeholders}}` and `<tags>` syntax)
+- **Placeholders**: Use `{{variable}}` syntax (e.g., `{{analysis}}`, `{{primary_language}}`)
+- **XML tags**: Use unescaped `<tag>content</tag>` for LLM context markers
+
 ### Architecture Principles
 
 - Provider-agnostic LLM interface via traits

@@ -22,6 +22,12 @@ This document provides unified guidance for AI agents working on the ruley proje
 5. **output/**: Multi-format output formatters (Cursor, Claude, Copilot, Windsurf, Aider, etc.)
 6. **utils/**: Shared utilities (error types, progress bars)
 
+### Output Pipeline
+
+- **Stage 5 (Formatting)**: LLM generates format-specific content, stored in `GeneratedRules.rules_by_format`
+- **Stage 6 (Writing)**: Formatters retrieve pre-formatted content and write to disk
+- **Formatters don't transform**: They retrieve content from `GeneratedRules` by format name
+
 ### Prompt Templates
 
 - **Location**: `prompts/*.md` - excluded from mdformat (uses `{{placeholders}}` and `<tags>` syntax)
@@ -69,6 +75,7 @@ This document provides unified guidance for AI agents working on the ruley proje
 - **Performance**: Trust the compiler, prefer clear code over micro-optimizations
 - **Static regex**: Use `std::sync::LazyLock` for compiled regexes (e.g., `static RE: LazyLock<Regex> = LazyLock::new(|| ...)`)
 - **cfg-gated imports**: Place imports used only in `#[cfg(...)]` blocks inside those blocks to avoid unused import warnings
+- **Trait object references**: Use `box.as_ref()` to get `&dyn Trait` from `Box<dyn Trait>` (avoids clippy `borrowed_box` warning)
 
 ## Error Handling
 

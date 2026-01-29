@@ -16,6 +16,8 @@
 //! ```
 
 use crate::packer::CompressedCodebase;
+use regex::Regex;
+use std::sync::LazyLock;
 
 /// Load the base analysis prompt template.
 pub fn base_prompt() -> &'static str {
@@ -89,7 +91,7 @@ pub fn build_analysis_prompt(codebase: &CompressedCodebase, focus: Option<&str>)
             .metadata
             .languages
             .iter()
-            .map(|(lang, count)| format!("{:?} ({})", lang, count))
+            .map(|(lang, count)| format!("{} ({})", lang, count))
             .collect();
         lang_list.sort();
         lang_list.join(", ")
@@ -201,28 +203,39 @@ fn format_codebase_content(codebase: &CompressedCodebase) -> String {
     content
 }
 
+// Static compiled regexes for language detection with word boundaries
+static RE_RUST: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\brust\b").unwrap());
+static RE_TYPESCRIPT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\btypescript\b").unwrap());
+static RE_JAVASCRIPT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\bjavascript\b").unwrap());
+static RE_PYTHON: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bpython\b").unwrap());
+static RE_GO: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(go|golang)\b").unwrap());
+static RE_JAVA: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bjava\b").unwrap());
+static RE_CPP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bc\+\+\b").unwrap());
+static RE_CSHARP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bc#\b").unwrap());
+
 /// Detect the primary programming language from analysis text.
 ///
-/// Simple heuristic based on common language keywords.
+/// Uses regex word boundaries to avoid false positives (e.g., "don't use Rust"
+/// won't match incorrectly). Languages are checked in order of specificity.
 fn detect_primary_language(analysis: &str) -> String {
-    let analysis_lower = analysis.to_lowercase();
-
-    // Check for language mentions in order of specificity
-    if analysis_lower.contains("rust") {
+    // Check for language mentions in order of specificity using word boundaries
+    if RE_RUST.is_match(analysis) {
         "rust".to_string()
-    } else if analysis_lower.contains("typescript") {
+    } else if RE_TYPESCRIPT.is_match(analysis) {
         "typescript".to_string()
-    } else if analysis_lower.contains("javascript") {
+    } else if RE_JAVASCRIPT.is_match(analysis) {
         "javascript".to_string()
-    } else if analysis_lower.contains("python") {
+    } else if RE_PYTHON.is_match(analysis) {
         "python".to_string()
-    } else if analysis_lower.contains("go ") || analysis_lower.contains("golang") {
+    } else if RE_GO.is_match(analysis) {
         "go".to_string()
-    } else if analysis_lower.contains("java ") {
+    } else if RE_JAVA.is_match(analysis) {
         "java".to_string()
-    } else if analysis_lower.contains("c++") {
+    } else if RE_CPP.is_match(analysis) {
         "cpp".to_string()
-    } else if analysis_lower.contains("c#") {
+    } else if RE_CSHARP.is_match(analysis) {
         "csharp".to_string()
     } else {
         "text".to_string()

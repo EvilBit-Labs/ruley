@@ -36,16 +36,16 @@ pub enum RuleType {
 }
 
 impl std::str::FromStr for RuleType {
-    type Err = std::convert::Infallible;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.to_lowercase().as_str() {
-            "always" | "alwaysapply" | "always_apply" => Self::AlwaysApply,
-            "auto" | "intelligent" | "applyintelligently" => Self::ApplyIntelligently,
-            "files" | "specific" | "applytospecificfiles" => Self::ApplyToSpecificFiles,
-            "manual" | "applymanually" => Self::ApplyManually,
-            _ => Self::ApplyIntelligently, // Default
-        })
+        match s.to_lowercase().as_str() {
+            "always" | "alwaysapply" | "always_apply" => Ok(Self::AlwaysApply),
+            "auto" | "intelligent" | "applyintelligently" => Ok(Self::ApplyIntelligently),
+            "files" | "specific" | "applytospecificfiles" => Ok(Self::ApplyToSpecificFiles),
+            "manual" | "applymanually" => Ok(Self::ApplyManually),
+            _ => Err(format!("unknown rule type: '{}'", s)),
+        }
     }
 }
 
@@ -196,8 +196,10 @@ impl GeneratedRules {
     }
 
     /// Get all format names that have rules.
-    pub fn formats(&self) -> Vec<&String> {
-        self.rules_by_format.keys().collect()
+    ///
+    /// Returns an iterator to avoid allocation. Callers can collect if needed.
+    pub fn formats(&self) -> impl Iterator<Item = &str> {
+        self.rules_by_format.keys().map(String::as_str)
     }
 }
 
@@ -365,10 +367,9 @@ mod tests {
             "manual".parse::<RuleType>().unwrap(),
             RuleType::ApplyManually
         );
-        assert_eq!(
-            "unknown".parse::<RuleType>().unwrap(),
-            RuleType::ApplyIntelligently
-        );
+        // Unknown values return an error
+        assert!("unknown".parse::<RuleType>().is_err());
+        assert!("invalid".parse::<RuleType>().is_err());
     }
 
     #[test]
@@ -423,7 +424,7 @@ mod tests {
         assert!(rules.has_format("cursor"));
         assert!(rules.has_format("claude"));
         assert!(!rules.has_format("copilot"));
-        assert_eq!(rules.formats().len(), 2);
+        assert_eq!(rules.formats().count(), 2);
     }
 
     #[test]

@@ -228,6 +228,8 @@ pub struct PipelineContext {
     pub compressed_codebase: Option<packer::CompressedCodebase>,
     /// Analysis result from LLM (populated in Stage 4)
     pub analysis_result: Option<String>,
+    /// Generated rules from analysis (populated in Stage 4)
+    pub generated_rules: Option<generator::GeneratedRules>,
     /// Cost tracking for LLM operations
     pub cost_tracker: Option<CostTracker>,
 }
@@ -243,6 +245,7 @@ impl PipelineContext {
             progress: ProgressTracker::new(),
             compressed_codebase: None,
             analysis_result: None,
+            generated_rules: None,
             cost_tracker: None,
         }
     }
@@ -387,7 +390,7 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     ctx.cost_tracker = Some(CostTracker::new(calculator.clone()));
 
     // Build the analysis prompt (needed for accurate cost estimation)
-    let prompt = build_analysis_prompt(&ctx.config.rule_type, ctx.config.description.as_deref());
+    let prompt = generator::build_analysis_prompt(codebase, ctx.config.description.as_deref());
     let prompt_tokens = tokenizer.count_tokens(&prompt);
 
     // Estimate cost
@@ -421,8 +424,17 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     tracing::info!("Analysis complete ({} characters)", analysis_result.len());
 
-    // Store the analysis result for the next stage
+    // Parse the analysis into GeneratedRules structure
+    let generated_rules = generator::parse_analysis_response(
+        &analysis_result,
+        &ctx.config.provider,
+        ctx.config.model.as_deref().unwrap_or("unknown"),
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to parse analysis response: {}", e))?;
+
+    // Store the analysis result and generated rules for the next stage
     ctx.analysis_result = Some(analysis_result);
+    ctx.generated_rules = Some(generated_rules);
 
     // Log cost summary if tracking
     if let Some(ref tracker) = ctx.cost_tracker {
@@ -687,25 +699,6 @@ async fn confirm_cost(
 
     let confirmed = matches!(input.trim().to_lowercase().as_str(), "y" | "yes");
     Ok(confirmed)
-}
-
-/// Build the analysis prompt from the rule type and optional description.
-fn build_analysis_prompt(rule_type: &str, description: Option<&str>) -> String {
-    let base = generator::prompts::base_prompt();
-
-    let mut prompt = base.to_string();
-
-    if let Some(desc) = description {
-        prompt.push_str("\n\nAdditional context from user:\n");
-        prompt.push_str(desc);
-    }
-
-    prompt.push_str(&format!(
-        "\n\nGenerate rules appropriate for a '{}' rule type.",
-        rule_type
-    ));
-
-    prompt
 }
 
 /// Perform LLM analysis on the codebase.

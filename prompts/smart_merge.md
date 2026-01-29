@@ -1,8 +1,8 @@
 The codebase has changed since the last rule generation.
 
-Previous Rules: \<existing_rules> {{existing_rules}} \</existing_rules>
+Previous Rules: <existing_rules> {{existing_rules}} </existing_rules>
 
-New Analysis: \<new_analysis> {{new_analysis}} \</new_analysis>
+New Analysis: <new_analysis> {{new_analysis}} </new_analysis>
 
 Task: Update the rules to reflect the current codebase state.
 

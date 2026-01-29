@@ -430,7 +430,7 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         &ctx.config.provider,
         ctx.config.model.as_deref().unwrap_or("unknown"),
     )
-    .map_err(|e| anyhow::anyhow!("Failed to parse analysis response: {}", e))?;
+    .context("Failed to parse analysis response")?;
 
     // Store the analysis result and generated rules for the next stage
     ctx.analysis_result = Some(analysis_result);
@@ -510,7 +510,16 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
         // Determine rule type for this format
         let rule_type: generator::RuleType = rule_type_str
-            .map(|s| s.parse().unwrap_or_default())
+            .map(|s| {
+                s.parse().unwrap_or_else(|_| {
+                    tracing::warn!(
+                        "Invalid rule_type '{}', using default for format '{}'",
+                        s,
+                        format
+                    );
+                    generator::get_default_rule_type(format)
+                })
+            })
             .unwrap_or_else(|| generator::get_default_rule_type(format));
 
         // Create formatted rules and add to the collection

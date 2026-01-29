@@ -60,6 +60,7 @@ repos:
       rev: 0.7.22
       hooks:
           - id: mdformat
+            exclude: ^prompts/
             additional_dependencies:
                 - mdformat-gfm
                 - mdformat-admon

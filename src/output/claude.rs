@@ -1,16 +1,35 @@
+//! Claude Code output formatter.
+//!
+//! Generates CLAUDE.md files for Claude Code's project instructions.
+//! File is placed in the project root.
+
 use crate::generator::rules::GeneratedRules;
 use crate::output::{Metadata, OutputFormatter};
 use crate::utils::error::RuleyError;
 
+/// Formatter for Claude Code's CLAUDE.md format.
 pub struct ClaudeFormatter;
 
 impl OutputFormatter for ClaudeFormatter {
-    fn format(&self, _rules: &GeneratedRules, _metadata: &Metadata) -> Result<String, RuleyError> {
-        // TODO: Implement Claude Code format
-        todo!("Claude formatter not yet implemented")
+    fn format(&self, rules: &GeneratedRules, metadata: &Metadata) -> Result<String, RuleyError> {
+        // Get the pre-formatted content for Claude format
+        rules
+            .get_format(&metadata.format)
+            .map(|r| r.content.clone())
+            .ok_or_else(|| {
+                RuleyError::OutputFormat(format!(
+                    "No rules generated for format '{}'. Available formats: {:?}",
+                    metadata.format,
+                    rules.formats().collect::<Vec<_>>()
+                ))
+            })
     }
 
     fn extension(&self) -> &str {
         "md"
+    }
+
+    fn default_filename(&self) -> &str {
+        "CLAUDE"
     }
 }

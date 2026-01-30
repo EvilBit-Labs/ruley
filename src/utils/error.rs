@@ -79,6 +79,9 @@ pub enum RuleyError {
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
+
+    #[error("Cache error: {0}")]
+    Cache(String),
 }
 
 /// Redact sensitive information from error messages.

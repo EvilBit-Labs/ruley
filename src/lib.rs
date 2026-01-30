@@ -559,15 +559,41 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         .and_then(|s| s.to_str())
         .unwrap_or("project");
 
-    // Create write options
+    // Create write options (honor --output for single format)
+    let mut output_paths = ctx.config.output_paths.clone();
+    if let Some(ref output) = ctx.config.output {
+        if ctx.config.format.len() != 1 {
+            return Err(anyhow::anyhow!(
+                "--output can only be used with a single format (got {} formats)",
+                ctx.config.format.len()
+            ));
+        }
+        output_paths.insert(
+            ctx.config.format[0].clone(),
+            output.to_string_lossy().into_owned(),
+        );
+    }
+
     let write_options = output::WriteOptions::new(&ctx.config.path)
-        .with_output_paths(ctx.config.output_paths.clone())
+        .with_output_paths(output_paths)
         .with_backups(true)
         .with_force(ctx.config.no_confirm);
 
-    // Write output files
-    let results = output::write_output(rules, &ctx.config.format, project_name, &write_options)
-        .context("Failed to write output files")?;
+    // Write output files (use spawn_blocking to avoid blocking the async runtime)
+    let rules_clone = rules.clone();
+    let formats_clone = ctx.config.format.clone();
+    let project_name_owned = project_name.to_string();
+    let results = tokio::task::spawn_blocking(move || {
+        output::write_output(
+            &rules_clone,
+            &formats_clone,
+            &project_name_owned,
+            &write_options,
+        )
+    })
+    .await
+    .context("Write task panicked")?
+    .context("Failed to write output files")?;
 
     // Report what was written
     for result in &results {

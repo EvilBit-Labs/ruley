@@ -25,7 +25,7 @@ This document provides unified guidance for AI agents working on the ruley proje
 ### Output Pipeline
 
 - **Stage 5 (Formatting)**: LLM generates format-specific content, stored in `GeneratedRules.rules_by_format`
-- **Stage 6 (Writing)**: Formatters retrieve pre-formatted content and write to disk
+- **Stage 6 (Writing)**: Writer module retrieves formatted content via formatters and writes to disk
 - **Formatters don't transform**: They retrieve content from `GeneratedRules` by format name
 
 ### Prompt Templates

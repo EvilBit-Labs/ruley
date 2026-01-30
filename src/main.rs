@@ -9,6 +9,8 @@ async fn main() {
         for cause in e.chain().skip(1) {
             eprintln!("  Caused by: {}", cause);
         }
+        eprintln!();
+        eprintln!("Temp files preserved in .ruley/ for debugging");
         std::process::exit(1);
     }
 }

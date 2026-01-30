@@ -28,6 +28,7 @@ pub struct CachedFileEntry {
 ///
 /// The manager ensures the directory exists with proper permissions (0o700)
 /// and provides methods for reading/writing temp files used during pipeline execution.
+#[derive(Debug)]
 pub struct TempFileManager {
     /// Path to the .ruley/ directory
     ruley_dir: PathBuf,

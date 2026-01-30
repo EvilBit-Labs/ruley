@@ -294,6 +294,28 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         .context("Failed to validate repository path");
     }
 
+    // Create cache manager
+    let cache_manager = TempFileManager::new(&ctx.config.path)?;
+
+    // Cleanup old temp files (24-hour threshold)
+    let old_files_cleaned =
+        cache_manager.cleanup_old_temp_files(std::time::Duration::from_secs(24 * 3600))?;
+    if old_files_cleaned > 0 {
+        tracing::info!("Cleaned up {} old temp files", old_files_cleaned);
+    }
+
+    // Ensure .ruley/ is in .gitignore
+    utils::cache::ensure_gitignore_entry(&ctx.config.path)?;
+
+    // Load previous state
+    let loaded_state = utils::state::load_state(cache_manager.ruley_dir())?;
+    if let Some(ref state) = loaded_state {
+        tracing::debug!("Loaded previous state from {:?}", state.last_run);
+    }
+
+    ctx.cache_manager = Some(cache_manager);
+    ctx.loaded_state = loaded_state;
+
     // Check for dry-run mode
     if ctx.config.dry_run {
         if !ctx.config.quiet {

@@ -13,20 +13,78 @@ use std::time::Duration;
 
 /// Serializable representation of a file entry for caching.
 ///
-/// This is a simplified version of `FileEntry` that can be serialized to JSON.
+/// This is a simplified version of [`crate::packer::FileEntry`] that can be serialized
+/// to JSON. It omits the `content` field which would be redundant in the cache since
+/// the compressed content is stored separately in `compressed.txt`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedFileEntry {
-    /// Path to the file (relative or absolute)
+    /// Path to the file (relative to project root, or absolute)
     pub path: PathBuf,
     /// Size of the file in bytes
     pub size: u64,
-    /// Detected programming language (as string)
+    /// Detected programming language (as string identifier, e.g., "rust", "typescript")
     pub language: Option<String>,
+}
+
+impl CachedFileEntry {
+    /// Create a new cached file entry.
+    ///
+    /// # Arguments
+    /// * `path` - Path to the file (should be non-empty)
+    /// * `size` - Size of the file in bytes
+    /// * `language` - Optional detected programming language
+    ///
+    /// # Returns
+    /// A new `CachedFileEntry` instance.
+    pub fn new(path: PathBuf, size: u64, language: Option<String>) -> Self {
+        Self {
+            path,
+            size,
+            language,
+        }
+    }
+}
+
+/// Result of a cleanup operation, tracking both successes and failures.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CleanupResult {
+    /// Number of files successfully deleted
+    pub deleted: usize,
+    /// Number of files that failed to delete
+    pub failed: usize,
+    /// Number of files skipped (e.g., couldn't read metadata)
+    pub skipped: usize,
+}
+
+impl CleanupResult {
+    /// Returns true if all operations succeeded (no failures or skips)
+    pub fn is_clean(&self) -> bool {
+        self.failed == 0 && self.skipped == 0
+    }
+
+    /// Returns the total number of files processed
+    pub fn total(&self) -> usize {
+        self.deleted + self.failed + self.skipped
+    }
+}
+
+impl std::fmt::Display for CleanupResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} deleted", self.deleted)?;
+        if self.failed > 0 {
+            write!(f, ", {} failed", self.failed)?;
+        }
+        if self.skipped > 0 {
+            write!(f, ", {} skipped", self.skipped)?;
+        }
+        Ok(())
+    }
 }
 
 /// Manages the `.ruley/` directory and temporary files.
 ///
-/// The manager ensures the directory exists with proper permissions (0o700)
+/// The manager ensures the directory exists with proper permissions
+/// (0o700 on Unix for owner read/write/execute only; default ACL on Windows)
 /// and provides methods for reading/writing temp files used during pipeline execution.
 #[derive(Debug)]
 pub struct TempFileManager {
@@ -180,12 +238,13 @@ impl TempFileManager {
     /// Clean up temporary files in the `.ruley/` directory.
     ///
     /// # Arguments
-    /// * `preserve_state` - If true, preserve `state.json`; otherwise delete all temp files
+    /// * `preserve_state` - If true, preserve `state.json`; if false, delete all files
+    ///   in the `.ruley/` directory (not just known temp file types)
     ///
     /// # Returns
-    /// Number of files deleted on success.
-    pub fn cleanup_temp_files(&self, preserve_state: bool) -> Result<usize, RuleyError> {
-        let mut deleted_count = 0;
+    /// A `CleanupResult` with counts of deleted, failed, and skipped files.
+    pub fn cleanup_temp_files(&self, preserve_state: bool) -> Result<CleanupResult, RuleyError> {
+        let mut result = CleanupResult::default();
 
         let entries = std::fs::read_dir(&self.ruley_dir).map_err(|e| {
             RuleyError::Cache(format!(
@@ -201,30 +260,28 @@ impl TempFileManager {
 
             let path = entry.path();
 
-            // Skip directories
             if path.is_dir() {
                 continue;
             }
 
-            // Get filename
             let Some(filename) = path.file_name().and_then(|n| n.to_str()) else {
+                result.skipped += 1;
                 continue;
             };
 
-            // Always preserve state.json if requested
             if preserve_state && filename == Self::STATE_JSON {
                 continue;
             }
 
-            // Delete the file
             if let Err(e) = std::fs::remove_file(&path) {
                 tracing::warn!("Failed to delete temp file {}: {}", path.display(), e);
+                result.failed += 1;
             } else {
-                deleted_count += 1;
+                result.deleted += 1;
             }
         }
 
-        Ok(deleted_count)
+        Ok(result)
     }
 
     /// Clean up temporary files older than the specified age threshold.
@@ -235,9 +292,14 @@ impl TempFileManager {
     /// * `age_threshold` - Files older than this duration will be deleted
     ///
     /// # Returns
-    /// Number of files deleted on success.
-    pub fn cleanup_old_temp_files(&self, age_threshold: Duration) -> Result<usize, RuleyError> {
-        let mut deleted_count = 0;
+    /// A `CleanupResult` with counts of deleted, failed, and skipped files.
+    /// Files are skipped if metadata cannot be read or if modification time
+    /// appears to be in the future (possible clock skew).
+    pub fn cleanup_old_temp_files(
+        &self,
+        age_threshold: Duration,
+    ) -> Result<CleanupResult, RuleyError> {
+        let mut result = CleanupResult::default();
         let now = std::time::SystemTime::now();
 
         let entries = std::fs::read_dir(&self.ruley_dir).map_err(|e| {
@@ -254,26 +316,24 @@ impl TempFileManager {
 
             let path = entry.path();
 
-            // Skip directories
             if path.is_dir() {
                 continue;
             }
 
-            // Get filename
             let Some(filename) = path.file_name().and_then(|n| n.to_str()) else {
+                result.skipped += 1;
                 continue;
             };
 
-            // Always preserve state.json
             if filename == Self::STATE_JSON {
                 continue;
             }
 
-            // Check file age
             let metadata = match entry.metadata() {
                 Ok(m) => m,
                 Err(e) => {
                     tracing::warn!("Failed to get metadata for {}: {}", path.display(), e);
+                    result.skipped += 1;
                     continue;
                 }
             };
@@ -286,25 +346,34 @@ impl TempFileManager {
                         path.display(),
                         e
                     );
+                    result.skipped += 1;
                     continue;
                 }
             };
 
             let age = match now.duration_since(modified) {
                 Ok(d) => d,
-                Err(_) => continue, // File is from the future, skip it
+                Err(_) => {
+                    tracing::debug!(
+                        "File {} has modification time in future, skipping (possible clock skew)",
+                        path.display()
+                    );
+                    result.skipped += 1;
+                    continue;
+                }
             };
 
             if age > age_threshold {
                 if let Err(e) = std::fs::remove_file(&path) {
                     tracing::warn!("Failed to delete old temp file {}: {}", path.display(), e);
+                    result.failed += 1;
                 } else {
-                    deleted_count += 1;
+                    result.deleted += 1;
                 }
             }
         }
 
-        Ok(deleted_count)
+        Ok(result)
     }
 }
 
@@ -319,6 +388,14 @@ impl TempFileManager {
 /// - If `.gitignore` doesn't exist, creates it with `.ruley/` entry
 /// - If `.gitignore` exists but doesn't contain `.ruley/`, appends the entry
 /// - If `.gitignore` already contains `.ruley/`, does nothing
+/// - Whitespace around entries is trimmed during comparison (e.g., `  .ruley/  ` matches `.ruley/`)
+///
+/// # Known Limitations
+///
+/// This function has a TOCTOU (time-of-check-time-of-use) race condition: if multiple
+/// ruley processes run concurrently in the same directory, they could both see the entry
+/// as missing and append duplicates. For a CLI tool typically run once at a time, this
+/// is low-impact. Consider using file locking if concurrent execution becomes common.
 pub fn ensure_gitignore_entry(project_root: &Path) -> Result<(), RuleyError> {
     let gitignore_path = project_root.join(".gitignore");
     let ruley_entry = ".ruley/";
@@ -527,8 +604,9 @@ mod tests {
             .expect("Failed to write state.json");
 
         // Cleanup with preserve_state = true
-        let deleted = manager.cleanup_temp_files(true).expect("Failed to cleanup");
-        assert_eq!(deleted, 3, "Should delete 3 temp files");
+        let result = manager.cleanup_temp_files(true).expect("Failed to cleanup");
+        assert_eq!(result.deleted, 3, "Should delete 3 temp files");
+        assert!(result.is_clean(), "Should have no failures or skips");
 
         // Verify state.json is preserved
         assert!(state_path.exists(), "state.json should be preserved");
@@ -549,10 +627,10 @@ mod tests {
         std::fs::write(&state_path, r#"{"state": "data"}"#).expect("Failed to write state.json");
 
         // Cleanup with preserve_state = false
-        let deleted = manager
+        let result = manager
             .cleanup_temp_files(false)
             .expect("Failed to cleanup");
-        assert_eq!(deleted, 1, "Should delete state.json");
+        assert_eq!(result.deleted, 1, "Should delete state.json");
 
         // Verify state.json is deleted
         assert!(!state_path.exists(), "state.json should be deleted");
@@ -573,11 +651,11 @@ mod tests {
         std::fs::write(&state_path, r#"{"state": "data"}"#).expect("Failed to write state.json");
 
         // With a zero threshold, all files (except state.json) should be considered "old"
-        let deleted = manager
+        let result = manager
             .cleanup_old_temp_files(Duration::from_secs(0))
             .expect("Failed to cleanup");
 
-        assert_eq!(deleted, 1, "Should delete 1 old file");
+        assert_eq!(result.deleted, 1, "Should delete 1 old file");
         assert!(state_path.exists(), "state.json should be preserved");
         assert!(!manager.ruley_dir().join("compressed.txt").exists());
     }
@@ -593,11 +671,11 @@ mod tests {
             .expect("Failed to write");
 
         // With a large threshold, no files should be deleted (files are very recent)
-        let deleted = manager
+        let result = manager
             .cleanup_old_temp_files(Duration::from_secs(3600))
             .expect("Failed to cleanup");
 
-        assert_eq!(deleted, 0, "Should not delete recent files");
+        assert_eq!(result.deleted, 0, "Should not delete recent files");
         assert!(manager.ruley_dir().join("compressed.txt").exists());
     }
 

@@ -54,11 +54,17 @@ pub struct State {
     pub user_selections: UserSelections,
     /// Output files generated in the last run.
     pub output_files: Vec<PathBuf>,
-    /// Total cost spent in the last run (USD).
+    /// Total cost spent in the last run (USD). Must be >= 0.0.
     pub cost_spent: f32,
     /// Total token count from the last run.
     pub token_count: usize,
-    /// Compression ratio achieved (0.0-1.0, where lower is more compressed).
+    /// Compression ratio (compressed_size / original_size).
+    ///
+    /// Values range from 0.0 to 1.0 where:
+    /// - 0.3 means 70% size reduction (compressed to 30% of original)
+    /// - 1.0 means no compression (100% of original size)
+    ///
+    /// Must be in range 0.0..=1.0.
     pub compression_ratio: f32,
 }
 
@@ -73,6 +79,32 @@ impl Default for State {
             token_count: 0,
             compression_ratio: 1.0,
         }
+    }
+}
+
+impl State {
+    /// Validate that all fields contain sensible values.
+    ///
+    /// # Returns
+    /// `Ok(())` if all fields are valid, or `Err` with a description of the issue.
+    ///
+    /// # Validated Constraints
+    /// - `compression_ratio` must be in range 0.0..=1.0
+    /// - `cost_spent` must be >= 0.0
+    pub fn validate(&self) -> Result<(), RuleyError> {
+        if !(0.0..=1.0).contains(&self.compression_ratio) {
+            return Err(RuleyError::State(format!(
+                "compression_ratio must be between 0.0 and 1.0, got {}",
+                self.compression_ratio
+            )));
+        }
+        if self.cost_spent < 0.0 {
+            return Err(RuleyError::State(format!(
+                "cost_spent must be >= 0.0, got {}",
+                self.cost_spent
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -102,10 +134,17 @@ pub fn save_state(state: &State, ruley_dir: &Path) -> Result<(), RuleyError> {
 ///
 /// # Returns
 /// - `Ok(Some(state))` if the file exists and is valid
-/// - `Ok(None)` if the file doesn't exist or is corrupted (logs warning on corruption)
+/// - `Ok(None)` if the file doesn't exist (normal case for first run)
 ///
-/// # Errors
-/// Returns `RuleyError::State` only for critical errors (not missing/corrupted files).
+/// # Design: Graceful Degradation
+///
+/// This function intentionally returns `Ok(None)` (not an error) for recoverable
+/// issues like corrupted files, permission errors, or schema mismatches. This design
+/// allows the CLI to proceed with a fresh state rather than failing. Warnings are
+/// logged for these cases so users can investigate if needed.
+///
+/// The rationale is that state is non-critical - losing preferences is better than
+/// blocking the user's workflow.
 pub fn load_state(ruley_dir: &Path) -> Result<Option<State>, RuleyError> {
     let path = ruley_dir.join(STATE_FILE);
 
@@ -134,7 +173,14 @@ pub fn load_state(ruley_dir: &Path) -> Result<Option<State>, RuleyError> {
                 .to_string();
 
             match migrate_state(value, &version) {
-                Ok(state) => Ok(Some(state)),
+                Ok(state) => {
+                    // Validate the loaded state
+                    if let Err(e) = state.validate() {
+                        tracing::warn!("State validation failed: {}", e);
+                        return Ok(None);
+                    }
+                    Ok(Some(state))
+                }
                 Err(e) => {
                     tracing::warn!("Failed to migrate state from version '{}': {}", version, e);
                     Ok(None)
@@ -380,6 +426,105 @@ mod tests {
         assert!(
             result.is_none(),
             "Invalid schema should return None, not error"
+        );
+    }
+
+    #[test]
+    fn test_state_error_display_format() {
+        let err = RuleyError::State("test error message".to_string());
+        let display = err.to_string();
+        assert!(
+            display.contains("State error:"),
+            "Should contain 'State error:'"
+        );
+        assert!(
+            display.contains("test error message"),
+            "Should contain the message"
+        );
+    }
+
+    #[test]
+    fn test_migrate_unknown_version_compatible_schema() {
+        let fixed_time = Utc.with_ymd_and_hms(2026, 1, 29, 12, 0, 0).unwrap();
+        let state = State {
+            version: "2.0.0".to_string(), // Unknown future version
+            last_run: fixed_time,
+            ..Default::default()
+        };
+
+        let value = serde_json::to_value(&state).expect("Failed to serialize");
+
+        // Should still parse if schema is compatible (unknown versions attempt current parse)
+        let migrated = migrate_state(value, "2.0.0").expect("Should attempt parse");
+        assert_eq!(migrated.last_run, fixed_time);
+    }
+
+    #[test]
+    fn test_migrate_unknown_version_incompatible_schema_fails() {
+        let value = serde_json::json!({
+            "version": "99.0.0",
+            "completely_different_field": true
+        });
+
+        let result = migrate_state(value, "99.0.0");
+        assert!(result.is_err(), "Incompatible schema should fail migration");
+    }
+
+    #[test]
+    fn test_state_validate_valid() {
+        let state = State::default();
+        assert!(state.validate().is_ok(), "Default state should be valid");
+    }
+
+    #[test]
+    fn test_state_validate_compression_ratio_out_of_range() {
+        let state = State {
+            compression_ratio: 1.5,
+            ..Default::default()
+        };
+        assert!(
+            state.validate().is_err(),
+            "compression_ratio > 1.0 should fail"
+        );
+
+        let state = State {
+            compression_ratio: -0.1,
+            ..Default::default()
+        };
+        assert!(
+            state.validate().is_err(),
+            "compression_ratio < 0.0 should fail"
+        );
+    }
+
+    #[test]
+    fn test_state_validate_negative_cost() {
+        let state = State {
+            cost_spent: -1.0,
+            ..Default::default()
+        };
+        assert!(state.validate().is_err(), "Negative cost_spent should fail");
+    }
+
+    #[test]
+    fn test_load_state_validates_loaded_data() {
+        let temp_dir = create_test_dir();
+        let ruley_dir = temp_dir.path().join(".ruley");
+        std::fs::create_dir_all(&ruley_dir).expect("Failed to create .ruley dir");
+
+        // Write valid JSON with invalid compression_ratio
+        let state_path = ruley_dir.join("state.json");
+        std::fs::write(
+            &state_path,
+            r#"{"version": "1.0.0", "last_run": "2026-01-29T12:00:00Z", "user_selections": {"file_conflict_action": null, "apply_to_all": false}, "output_files": [], "cost_spent": 0.0, "token_count": 0, "compression_ratio": 5.0}"#,
+        )
+        .expect("Failed to write file");
+
+        // Load should return None due to validation failure
+        let result = load_state(&ruley_dir).expect("Should not error");
+        assert!(
+            result.is_none(),
+            "Invalid compression_ratio should return None after validation"
         );
     }
 }

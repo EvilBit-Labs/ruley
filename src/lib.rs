@@ -180,20 +180,34 @@ impl TempFileRefs {
     }
 
     /// Attempt to delete all tracked temporary files and clear the list.
+    ///
     /// Continues on individual file deletion failures to ensure all files are attempted.
-    /// Returns the last error encountered, if any.
+    /// All failures are logged with warnings. If any deletions fail, returns an error
+    /// with the count of failed deletions.
     pub fn clear(&mut self) -> std::io::Result<()> {
+        let mut failure_count = 0;
         let mut last_error = None;
+
         for path in &self.files {
             if path.exists()
                 && let Err(e) = std::fs::remove_file(path)
             {
                 tracing::warn!("Failed to delete temp file {}: {}", path.display(), e);
+                failure_count += 1;
                 last_error = Some(e);
             }
         }
         self.files.clear();
-        last_error.map_or(Ok(()), Err)
+
+        match (failure_count, last_error) {
+            (0, _) => Ok(()),
+            (1, Some(e)) => Err(e),
+            (n, Some(e)) => Err(std::io::Error::new(
+                e.kind(),
+                format!("Failed to delete {} temp files (last error: {})", n, e),
+            )),
+            (_, None) => Ok(()), // Should not happen
+        }
     }
 }
 
@@ -299,10 +313,10 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     let cache_manager = TempFileManager::new(&ctx.config.path)?;
 
     // Cleanup old temp files (24-hour threshold)
-    let old_files_cleaned =
+    let cleanup_result =
         cache_manager.cleanup_old_temp_files(std::time::Duration::from_secs(24 * 3600))?;
-    if old_files_cleaned > 0 {
-        tracing::info!("Cleaned up {} old temp files", old_files_cleaned);
+    if cleanup_result.deleted > 0 {
+        tracing::info!("Cleaned up {} old temp files", cleanup_result.deleted);
     }
 
     // Ensure .ruley/ is in .gitignore
@@ -732,9 +746,9 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         tracing::info!("Saved state to .ruley/state.json");
 
         // Clean up temp files (preserve state.json)
-        let cleaned = cache.cleanup_temp_files(true)?;
-        if cleaned > 0 {
-            tracing::debug!("Cleaned up {} temp files", cleaned);
+        let cleanup_result = cache.cleanup_temp_files(true)?;
+        if cleanup_result.deleted > 0 {
+            tracing::debug!("Cleaned up {} temp files", cleanup_result.deleted);
         }
     }
 

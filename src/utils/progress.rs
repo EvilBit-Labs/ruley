@@ -245,6 +245,15 @@ impl Default for ProgressManager {
     }
 }
 
+impl std::fmt::Debug for ProgressManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProgressManager")
+            .field("stages", &self.bars.keys().collect::<Vec<_>>())
+            .field("is_tty", &self.is_tty)
+            .finish_non_exhaustive()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

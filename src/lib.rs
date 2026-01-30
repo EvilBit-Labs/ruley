@@ -337,6 +337,22 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         entries
     };
 
+    // Write scanned files to cache (for debugging/recovery)
+    if let Some(ref cache) = ctx.cache_manager {
+        // Convert FileEntry to CachedFileEntry for serialization
+        let cached_entries: Vec<utils::cache::CachedFileEntry> = file_entries
+            .iter()
+            .map(|e| utils::cache::CachedFileEntry {
+                path: e.path.clone(),
+                size: e.size,
+                language: e.language.as_ref().map(|l| format!("{:?}", l)),
+            })
+            .collect();
+        let path = cache.write_scanned_files(&cached_entries)?;
+        ctx.temp_files.add(path);
+        tracing::debug!("Cached scanned files list");
+    }
+
     // Validate repomix file exists if specified
     if let Some(ref path) = ctx.config.repomix_file
         && !path.exists()
@@ -366,6 +382,22 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     };
 
     ctx.compressed_codebase = Some(compressed_codebase);
+
+    // Write compressed codebase summary to cache
+    if let Some(ref cache) = ctx.cache_manager {
+        if let Some(ref codebase) = ctx.compressed_codebase {
+            // Create a summary string of the compressed codebase for caching
+            let summary = format!(
+                "Files: {}\nTotal size: {} bytes\nCompression ratio: {:.2}",
+                codebase.metadata.total_files,
+                codebase.metadata.total_compressed_size,
+                codebase.metadata.compression_ratio
+            );
+            let path = cache.write_compressed_codebase(&summary)?;
+            ctx.temp_files.add(path);
+            tracing::debug!("Cached compressed codebase summary");
+        }
+    }
 
     // Stage 4: Analyzing
     ctx.transition_to(PipelineStage::Analyzing);

@@ -123,17 +123,18 @@ fn write_format(
     let mut backup_created = false;
     let mut backup_path = None;
 
-    // Handle existing file
+    // Handle existing file - require --force to overwrite
     if !is_new {
+        if !options.force {
+            return Err(RuleyError::OutputFormat(format!(
+                "Output file already exists: {}. Use --force to overwrite.",
+                output_path.display()
+            )));
+        }
         if options.create_backups {
             let backup = create_backup(&output_path)?;
             backup_created = true;
             backup_path = Some(backup);
-        } else if !options.force {
-            return Err(RuleyError::OutputFormat(format!(
-                "Output file already exists: {}. Use --force to overwrite or enable backups.",
-                output_path.display()
-            )));
         }
     }
 
@@ -216,15 +217,13 @@ fn create_backup(path: &Path) -> Result<PathBuf, RuleyError> {
 
 /// Generate a backup path for a file.
 ///
-/// Uses timestamp-based naming to avoid conflicts: `file.ext` -> `file.ext.backup.YYYYMMDD_HHMMSS`
+/// Uses simple `.bak` suffix: `file.ext` -> `file.ext.bak`
 fn generate_backup_path(path: &Path) -> PathBuf {
-    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
     let backup_name = format!(
-        "{}.backup.{}",
+        "{}.bak",
         path.file_name()
             .map(|s| s.to_string_lossy())
-            .unwrap_or_default(),
-        timestamp
+            .unwrap_or_default()
     );
 
     path.with_file_name(backup_name)
@@ -262,11 +261,7 @@ mod tests {
         let path = Path::new("/project/CLAUDE.md");
         let backup = generate_backup_path(path);
 
-        assert!(
-            backup
-                .to_string_lossy()
-                .starts_with("/project/CLAUDE.md.backup.")
-        );
+        assert_eq!(backup, PathBuf::from("/project/CLAUDE.md.bak"));
     }
 
     #[test]

@@ -1,13 +1,13 @@
 //! Aider output formatter.
 //!
-//! Generates CONVENTIONS.md files for Aider's conventions system.
+//! Generates .aider.conf.yml files for Aider's configuration.
 //! File is placed in the project root.
 
 use crate::generator::rules::GeneratedRules;
 use crate::output::{Metadata, OutputFormatter};
 use crate::utils::error::RuleyError;
 
-/// Formatter for Aider conventions.
+/// Formatter for Aider configuration.
 pub struct AiderFormatter;
 
 impl OutputFormatter for AiderFormatter {
@@ -26,10 +26,10 @@ impl OutputFormatter for AiderFormatter {
     }
 
     fn extension(&self) -> &str {
-        "md"
+        "yml"
     }
 
     fn default_filename(&self) -> &str {
-        "CONVENTIONS"
+        ".aider.conf"
     }
 }

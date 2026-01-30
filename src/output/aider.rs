@@ -1,16 +1,35 @@
+//! Aider output formatter.
+//!
+//! Generates .aider.conf.yml files for Aider's configuration.
+//! File is placed in the project root.
+
 use crate::generator::rules::GeneratedRules;
 use crate::output::{Metadata, OutputFormatter};
 use crate::utils::error::RuleyError;
 
+/// Formatter for Aider configuration.
 pub struct AiderFormatter;
 
 impl OutputFormatter for AiderFormatter {
-    fn format(&self, _rules: &GeneratedRules, _metadata: &Metadata) -> Result<String, RuleyError> {
-        // TODO: Implement Aider format
-        todo!("Aider formatter not yet implemented")
+    fn format(&self, rules: &GeneratedRules, metadata: &Metadata) -> Result<String, RuleyError> {
+        // Get the pre-formatted content for Aider format
+        rules
+            .get_format(&metadata.format)
+            .map(|r| r.content.clone())
+            .ok_or_else(|| {
+                RuleyError::OutputFormat(format!(
+                    "No rules generated for format '{}'. Available formats: {:?}",
+                    metadata.format,
+                    rules.formats().collect::<Vec<_>>()
+                ))
+            })
     }
 
     fn extension(&self) -> &str {
-        "md"
+        "yml"
+    }
+
+    fn default_filename(&self) -> &str {
+        ".aider.conf"
     }
 }

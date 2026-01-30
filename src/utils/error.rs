@@ -219,4 +219,18 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("ANTHROPIC_API_KEY"));
     }
+
+    #[test]
+    fn test_cache_error_display_format() {
+        let err = RuleyError::Cache("test cache error".to_string());
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Cache error:"),
+            "Should contain 'Cache error:'"
+        );
+        assert!(
+            msg.contains("test cache error"),
+            "Should contain the error message"
+        );
+    }
 }

@@ -125,12 +125,16 @@ pub fn greet() -> &'static str {
         .expect("Failed to write state.json");
 
     // 6. Cleanup temp files (preserve state)
-    let deleted_count = manager
+    let cleanup_result = manager
         .cleanup_temp_files(true)
         .expect("Failed to cleanup temp files");
 
     // Should have deleted: files.json, compressed.txt, chunk-0.json, chunk-1.json
-    assert_eq!(deleted_count, 4, "Should delete 4 temp files");
+    assert_eq!(cleanup_result.deleted, 4, "Should delete 4 temp files");
+    assert!(
+        cleanup_result.is_clean(),
+        "Should have no failures or skips"
+    );
 
     // 7. Verify temp files are gone but state.json is preserved
     assert!(
@@ -343,8 +347,8 @@ fn test_cleanup_preserves_state_with_temp_files() {
     save_state(&state, manager.ruley_dir()).expect("Failed to save state");
 
     // Cleanup with preserve_state = true
-    let deleted = manager.cleanup_temp_files(true).expect("Failed to cleanup");
-    assert_eq!(deleted, 2, "Should delete 2 temp files");
+    let result = manager.cleanup_temp_files(true).expect("Failed to cleanup");
+    assert_eq!(result.deleted, 2, "Should delete 2 temp files");
 
     // State should still be loadable
     let loaded = load_state(manager.ruley_dir())

@@ -287,7 +287,8 @@ impl LLMClient {
             | RuleyError::OutputFormat(_)
             | RuleyError::ParseError { .. }
             | RuleyError::ValidationError { .. }
-            | RuleyError::Cache(_) => false,
+            | RuleyError::Cache(_)
+            | RuleyError::State(_) => false,
         }
     }
 

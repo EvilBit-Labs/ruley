@@ -544,7 +544,85 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 6: Writing
     ctx.transition_to(PipelineStage::Writing);
-    // TODO: Implement file writing
+
+    // Get the generated rules for writing
+    let rules = ctx
+        .generated_rules
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("No generated rules available for writing"))?;
+
+    // Determine project name from path
+    let project_name = ctx
+        .config
+        .path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("project");
+
+    // Create write options (honor --output for single format)
+    let mut output_paths = ctx.config.output_paths.clone();
+    if let Some(ref output) = ctx.config.output {
+        if ctx.config.format.len() != 1 {
+            return Err(anyhow::anyhow!(
+                "--output can only be used with a single format (got {} formats)",
+                ctx.config.format.len()
+            ));
+        }
+        output_paths.insert(
+            ctx.config.format[0].clone(),
+            output.to_string_lossy().into_owned(),
+        );
+    }
+
+    let write_options = output::WriteOptions::new(&ctx.config.path)
+        .with_output_paths(output_paths)
+        .with_backups(true)
+        .with_force(ctx.config.no_confirm);
+
+    // Write output files (use spawn_blocking to avoid blocking the async runtime)
+    let rules_clone = rules.clone();
+    let formats_clone = ctx.config.format.clone();
+    let project_name_owned = project_name.to_string();
+    let results = tokio::task::spawn_blocking(move || {
+        output::write_output(
+            &rules_clone,
+            &formats_clone,
+            &project_name_owned,
+            &write_options,
+        )
+    })
+    .await
+    .context("Write task panicked")?
+    .context("Failed to write output files")?;
+
+    // Report what was written
+    for result in &results {
+        if result.is_new {
+            tracing::info!("Created {} at {}", result.format, result.path.display());
+        } else if result.backup_created {
+            tracing::info!(
+                "Updated {} at {} (backup: {})",
+                result.format,
+                result.path.display(),
+                result
+                    .backup_path
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default()
+            );
+        } else {
+            tracing::info!("Overwrote {} at {}", result.format, result.path.display());
+        }
+    }
+
+    if !ctx.config.quiet {
+        println!();
+        println!("Output Files Written");
+        println!("====================");
+        for result in &results {
+            println!("  {} -> {}", result.format, result.path.display());
+        }
+    }
 
     // Stage 7: Validating
     ctx.transition_to(PipelineStage::Validating);

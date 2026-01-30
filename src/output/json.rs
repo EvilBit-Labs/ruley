@@ -1,7 +1,13 @@
+//! JSON output formatter.
+//!
+//! Generates structured JSON output of the generated rules.
+//! Useful for programmatic consumption or further processing.
+
 use crate::generator::rules::GeneratedRules;
 use crate::output::{Metadata, OutputFormatter};
 use crate::utils::error::RuleyError;
 
+/// Formatter for JSON output.
 pub struct JsonFormatter;
 
 impl OutputFormatter for JsonFormatter {
@@ -11,5 +17,9 @@ impl OutputFormatter for JsonFormatter {
 
     fn extension(&self) -> &str {
         "json"
+    }
+
+    fn default_filename(&self) -> &str {
+        "ruley-output"
     }
 }

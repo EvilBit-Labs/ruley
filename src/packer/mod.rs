@@ -5,7 +5,6 @@ pub mod output;
 pub mod repomix;
 pub mod walker;
 
-use compress::Language;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -47,7 +46,7 @@ pub struct CompressedFile {
     /// Size of compressed content in bytes
     pub compressed_size: usize,
     /// Detected programming language
-    pub language: Option<Language>,
+    pub language: Option<compress::Language>,
 }
 
 /// Metadata about the entire compressed codebase.
@@ -60,7 +59,7 @@ pub struct CodebaseMetadata {
     /// Total size of compressed content in bytes
     pub total_compressed_size: usize,
     /// File count breakdown by language
-    pub languages: HashMap<Language, usize>,
+    pub languages: HashMap<compress::Language, usize>,
     /// Overall compression ratio (0.0 to 1.0, where lower is better)
     pub compression_ratio: f32,
 }
@@ -115,6 +114,8 @@ impl CompressedCodebase {
     }
 }
 
-pub use compress::{Compressor, TreeSitterCompressor, WhitespaceCompressor, compress_codebase};
+pub use compress::{
+    Compressor, Language, TreeSitterCompressor, WhitespaceCompressor, compress_codebase,
+};
 pub use repomix::parse_repomix;
 pub use walker::{FileEntry, scan_files};

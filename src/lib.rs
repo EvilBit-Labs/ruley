@@ -54,9 +54,12 @@ use llm::tokenizer::AnthropicTokenizer;
 use llm::tokenizer::{TiktokenTokenizer, Tokenizer, TokenizerModel};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use utils::cache::TempFileManager;
+use utils::cost_display::{display_cost_estimate, prompt_confirmation};
+use utils::dry_run::display_dry_run_summary;
+use utils::progress::ProgressManager;
 use utils::state::State;
+use utils::summary::display_success_summary;
 
 /// Initialize logging based on verbosity level.
 /// This should be called once at application startup.
@@ -253,12 +256,23 @@ pub struct PipelineContext {
     pub cache_manager: Option<TempFileManager>,
     /// Loaded state from previous runs (for user preferences and metrics)
     pub loaded_state: Option<State>,
+    /// Progress manager for multi-stage progress bars
+    pub progress_manager: Option<ProgressManager>,
+    /// Start time for elapsed time tracking
+    pub start_time: std::time::Instant,
 }
 
 impl PipelineContext {
     /// Create a new PipelineContext with the given merged configuration.
     /// Initializes with PipelineStage::Init and empty tracking structures.
     pub fn new(config: MergedConfig) -> Self {
+        // Initialize progress manager if not in quiet mode
+        let progress_manager = if !config.quiet {
+            Some(ProgressManager::new())
+        } else {
+            None
+        };
+
         Self {
             config,
             stage: PipelineStage::Init,
@@ -270,6 +284,8 @@ impl PipelineContext {
             cost_tracker: None,
             cache_manager: None,
             loaded_state: None,
+            progress_manager,
+            start_time: std::time::Instant::now(),
         }
     }
 
@@ -330,14 +346,6 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     ctx.cache_manager = Some(cache_manager);
     ctx.loaded_state = loaded_state;
-
-    // Check for dry-run mode
-    if ctx.config.dry_run {
-        if !ctx.config.quiet {
-            display_dry_run_config(&ctx.config);
-        }
-        return Ok(());
-    }
 
     // Stage 2: Scanning
     ctx.transition_to(PipelineStage::Scanning);
@@ -414,6 +422,24 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         }
     }
 
+    // Check for dry-run mode (after scanning/compression so we can show file breakdown)
+    if ctx.config.dry_run {
+        if let Some(ref codebase) = ctx.compressed_codebase {
+            // Try to get pricing from client, fall back to default pricing
+            // (dry-run shouldn't require API keys)
+            let pricing = match create_llm_client(&ctx.config) {
+                Ok(client) => client.pricing(),
+                Err(_) => get_default_pricing(&ctx.config.provider),
+            };
+
+            // Convert Vec<String> to &[String] for display function
+            let formats: Vec<String> = ctx.config.format.clone();
+
+            display_dry_run_summary(codebase, &formats, &ctx.config, &pricing)?;
+        }
+        return Ok(());
+    }
+
     // Stage 4: Analyzing
     ctx.transition_to(PipelineStage::Analyzing);
 
@@ -466,34 +492,39 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     let calculator = CostCalculator::new(pricing);
     ctx.cost_tracker = Some(CostTracker::new(calculator.clone()));
 
-    // Build the analysis prompt (needed for accurate cost estimation)
+    // Build the analysis prompt
     let prompt = generator::build_analysis_prompt(codebase, ctx.config.description.as_deref());
-    let prompt_tokens = tokenizer.count_tokens(&prompt);
-
-    // Estimate cost
-    // For multi-chunk, estimate includes: N chunk analyses + 1 merge
-    let estimated_output_tokens = chunks.len() * 4096; // Approximate output per chunk
-    let total_chunk_tokens: usize = chunks.iter().map(|c| c.token_count).sum();
-    // Include prompt tokens: for multi-chunk, prompt is sent with each chunk
-    let estimated_input_tokens = if chunks.len() == 1 {
-        total_chunk_tokens + prompt_tokens
-    } else {
-        total_chunk_tokens + (prompt_tokens * chunks.len())
-    };
-    let cost_estimate = calculator.estimate_cost(estimated_input_tokens, estimated_output_tokens);
 
     // Show cost estimation and confirm (unless --no-confirm)
     if !ctx.config.no_confirm {
-        let confirmed = confirm_cost(&cost_estimate, chunks.len(), ctx.config.quiet).await?;
+        // Display the tree-formatted cost estimate
+        let pricing = client.pricing();
+        display_cost_estimate(
+            codebase,
+            &chunks,
+            &ctx.config.format,
+            &ctx.config.provider,
+            &pricing,
+            ctx.config.quiet,
+        )?;
+
+        // Prompt for confirmation
+        let confirmed = prompt_confirmation("Proceed with LLM analysis?", false).await?;
         if !confirmed {
             tracing::info!("User cancelled operation");
             return Ok(());
         }
     } else if !ctx.config.quiet {
-        println!(
-            "Estimated cost: ${:.4} ({} input tokens, ~{} output tokens)",
-            cost_estimate.total_cost, cost_estimate.input_tokens, cost_estimate.output_tokens
-        );
+        // Just show the summary without confirmation
+        let pricing = client.pricing();
+        display_cost_estimate(
+            codebase,
+            &chunks,
+            &ctx.config.format,
+            &ctx.config.provider,
+            &pricing,
+            false,
+        )?;
     }
 
     // Perform the analysis
@@ -692,15 +723,6 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         }
     }
 
-    if !ctx.config.quiet {
-        println!();
-        println!("Output Files Written");
-        println!("====================");
-        for result in &results {
-            println!("  {} -> {}", result.format, result.path.display());
-        }
-    }
-
     // Stage 7: Validating
     ctx.transition_to(PipelineStage::Validating);
     // TODO: Implement output validation
@@ -711,7 +733,46 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 9: Reporting
     ctx.transition_to(PipelineStage::Reporting);
-    // TODO: Implement reporting and summary generation
+
+    // Calculate metrics for success summary
+    let files_analyzed = ctx
+        .compressed_codebase
+        .as_ref()
+        .map(|c| c.metadata.total_files)
+        .unwrap_or(0);
+
+    let tokens_processed = ctx
+        .cost_tracker
+        .as_ref()
+        .map(|t| t.summary().total_input_tokens)
+        .unwrap_or(0);
+
+    let compression_ratio = ctx.compressed_codebase.as_ref().and_then(|c| {
+        if c.metadata.compression_ratio < 1.0 {
+            Some(c.metadata.compression_ratio)
+        } else {
+            None
+        }
+    });
+
+    let actual_cost = ctx
+        .cost_tracker
+        .as_ref()
+        .map(|t| t.summary().total_cost)
+        .unwrap_or(0.0);
+
+    let elapsed = ctx.start_time.elapsed();
+
+    // Display success summary
+    display_success_summary(
+        &results,
+        files_analyzed,
+        tokens_processed,
+        compression_ratio,
+        actual_cost,
+        elapsed,
+        ctx.config.quiet,
+    )?;
 
     // Stage 10: Cleanup
     ctx.transition_to(PipelineStage::Cleanup);
@@ -771,38 +832,6 @@ fn cleanup_temp_files(ctx: &mut PipelineContext) -> Result<()> {
 
     tracing::debug!("Cleaned up {} temporary files", file_count);
     Ok(())
-}
-
-/// Display configuration summary for dry-run mode.
-fn display_dry_run_config(config: &MergedConfig) {
-    let include_str = if config.include.is_empty() {
-        "none".to_string()
-    } else {
-        config.include.join(", ")
-    };
-
-    let exclude_str = if config.exclude.is_empty() {
-        "none".to_string()
-    } else {
-        config.exclude.join(", ")
-    };
-
-    println!("Dry Run Mode - Configuration Summary");
-    println!("=====================================");
-    println!("Provider:     {}", config.provider);
-    println!(
-        "Model:        {}",
-        config.model.as_deref().unwrap_or("default")
-    );
-    println!("Format:       {}", config.format.join(", "));
-    println!("Path:         {}", config.path.display());
-    println!("Compress:     {}", config.compress);
-    println!("Chunk Size:   {}", config.chunk_size);
-    println!("Include:      {}", include_str);
-    println!("Exclude:      {}", exclude_str);
-    println!("No Confirm:   {}", config.no_confirm);
-    println!();
-    println!("No LLM calls will be made.");
 }
 
 /// Get the appropriate tokenizer for the given provider.
@@ -923,65 +952,26 @@ fn get_context_limit(provider: &str, _model: Option<&str>) -> usize {
     }
 }
 
-/// Display cost estimation and prompt for confirmation.
+/// Get default pricing for a provider when API key is not available.
 ///
-/// # Arguments
-///
-/// * `estimate` - The cost estimate to display
-/// * `num_chunks` - Number of chunks that will be processed
-/// * `quiet` - Whether to suppress output
-///
-/// # Returns
-///
-/// `true` if the user confirms, `false` otherwise.
-async fn confirm_cost(
-    estimate: &llm::cost::CostEstimate,
-    num_chunks: usize,
-    quiet: bool,
-) -> Result<bool> {
-    if quiet {
-        return Ok(true);
+/// Used in dry-run mode to show cost estimates without requiring credentials.
+fn get_default_pricing(provider: &str) -> llm::provider::Pricing {
+    use llm::provider::Pricing;
+
+    match provider.to_lowercase().as_str() {
+        "anthropic" => Pricing {
+            input_per_1k: 0.003, // Claude Sonnet pricing
+            output_per_1k: 0.015,
+        },
+        "openai" => Pricing {
+            input_per_1k: 0.0025, // GPT-4o pricing
+            output_per_1k: 0.01,
+        },
+        _ => Pricing {
+            input_per_1k: 0.003, // Conservative default
+            output_per_1k: 0.015,
+        },
     }
-
-    println!();
-    println!("Cost Estimation");
-    println!("===============");
-    println!(
-        "Input tokens:  {:>10} (${:.4})",
-        estimate.input_tokens, estimate.input_cost
-    );
-    println!(
-        "Output tokens: {:>10} (${:.4}) [estimated]",
-        estimate.output_tokens, estimate.output_cost
-    );
-    println!(
-        "Total tokens:  {:>10}",
-        estimate.input_tokens + estimate.output_tokens
-    );
-    println!("----------------------------");
-    println!("Estimated cost: ${:.4}", estimate.total_cost);
-    if num_chunks > 1 {
-        println!("Chunks to process: {}", num_chunks);
-    }
-    println!();
-
-    let mut stdout = tokio::io::stdout();
-    stdout
-        .write_all(b"Proceed with LLM analysis? [y/N] ")
-        .await
-        .context("Failed to write to stdout")?;
-    stdout.flush().await.context("Failed to flush stdout")?;
-
-    let stdin = tokio::io::stdin();
-    let mut reader = BufReader::new(stdin);
-    let mut input = String::new();
-    reader
-        .read_line(&mut input)
-        .await
-        .context("Failed to read user input")?;
-
-    let confirmed = matches!(input.trim().to_lowercase().as_str(), "y" | "yes");
-    Ok(confirmed)
 }
 
 /// Perform LLM analysis on the codebase.

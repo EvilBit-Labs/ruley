@@ -30,8 +30,7 @@
 use crate::llm::chunker::Chunk;
 use crate::llm::cost::CostCalculator;
 use crate::llm::provider::Pricing;
-use crate::packer::CompressedCodebase;
-use crate::packer::compress::Language;
+use crate::packer::{CompressedCodebase, Language};
 use anyhow::Result;
 use console::{Term, style};
 use std::collections::HashMap;

@@ -235,6 +235,7 @@ pub fn run_cli_with_config(dir: &PathBuf, args: &[&str]) -> std::process::Output
 /// `Chunk Size:   100000`
 ///
 /// This helper extracts those `Key: value` pairs for precise assertions.
+#[allow(dead_code)]
 pub fn parse_dry_run_output(stdout: &str) -> HashMap<String, String> {
     let mut parsed = HashMap::new();
 

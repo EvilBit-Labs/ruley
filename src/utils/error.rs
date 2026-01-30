@@ -79,6 +79,12 @@ pub enum RuleyError {
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
+
+    #[error("Cache error: {0}")]
+    Cache(String),
+
+    #[error("State error: {0}")]
+    State(String),
 }
 
 /// Redact sensitive information from error messages.
@@ -212,5 +218,19 @@ mod tests {
         let err = RuleyError::missing_api_key("anthropic");
         let msg = err.to_string();
         assert!(msg.contains("ANTHROPIC_API_KEY"));
+    }
+
+    #[test]
+    fn test_cache_error_display_format() {
+        let err = RuleyError::Cache("test cache error".to_string());
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Cache error:"),
+            "Should contain 'Cache error:'"
+        );
+        assert!(
+            msg.contains("test cache error"),
+            "Should contain the error message"
+        );
     }
 }

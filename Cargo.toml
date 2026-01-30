@@ -47,7 +47,7 @@ compression-all = [
 [dependencies]
 anyhow      = "1.0.100"
 async-trait = "0.1.89"
-chrono      = "0.4.42"
+chrono = { version = "0.4.42", features = ["serde"] }
 # CLI
 clap = { version = "4.5.54", features = [ "derive", "env" ] }
 

@@ -124,6 +124,7 @@ ruley uses **both** `thiserror` and `anyhow` for different purposes:
 ### Async Architecture
 
 - Use Tokio runtime for all I/O and task management
+- Use `tokio::task::spawn_blocking` for `std::fs` operations in async code
 - Prefer channels and ownership transfer over shared mutable state
 - Use `?` operator and proper error propagation in async contexts
 - Implement proper cleanup and graceful shutdown

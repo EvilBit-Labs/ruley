@@ -43,6 +43,7 @@ pub mod packer;
 pub mod utils;
 
 use anyhow::{Context, Result};
+use chrono::Utc;
 use cli::config::{ChunkingConfig, ProvidersConfig};
 use llm::chunker::{Chunk, ChunkConfig};
 use llm::client::LLMClient;
@@ -54,6 +55,8 @@ use llm::tokenizer::{TiktokenTokenizer, Tokenizer, TokenizerModel};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use utils::cache::TempFileManager;
+use utils::state::State;
 
 /// Initialize logging based on verbosity level.
 /// This should be called once at application startup.
@@ -177,20 +180,34 @@ impl TempFileRefs {
     }
 
     /// Attempt to delete all tracked temporary files and clear the list.
+    ///
     /// Continues on individual file deletion failures to ensure all files are attempted.
-    /// Returns the last error encountered, if any.
+    /// All failures are logged with warnings. If any deletions fail, returns an error
+    /// with the count of failed deletions.
     pub fn clear(&mut self) -> std::io::Result<()> {
+        let mut failure_count = 0;
         let mut last_error = None;
+
         for path in &self.files {
             if path.exists()
                 && let Err(e) = std::fs::remove_file(path)
             {
                 tracing::warn!("Failed to delete temp file {}: {}", path.display(), e);
+                failure_count += 1;
                 last_error = Some(e);
             }
         }
         self.files.clear();
-        last_error.map_or(Ok(()), Err)
+
+        match (failure_count, last_error) {
+            (0, _) => Ok(()),
+            (1, Some(e)) => Err(e),
+            (n, Some(e)) => Err(std::io::Error::new(
+                e.kind(),
+                format!("Failed to delete {} temp files (last error: {})", n, e),
+            )),
+            (_, None) => Ok(()), // Should not happen
+        }
     }
 }
 
@@ -232,6 +249,10 @@ pub struct PipelineContext {
     pub generated_rules: Option<generator::GeneratedRules>,
     /// Cost tracking for LLM operations
     pub cost_tracker: Option<CostTracker>,
+    /// Cache manager for .ruley/ directory operations
+    pub cache_manager: Option<TempFileManager>,
+    /// Loaded state from previous runs (for user preferences and metrics)
+    pub loaded_state: Option<State>,
 }
 
 impl PipelineContext {
@@ -247,6 +268,8 @@ impl PipelineContext {
             analysis_result: None,
             generated_rules: None,
             cost_tracker: None,
+            cache_manager: None,
+            loaded_state: None,
         }
     }
 
@@ -286,6 +309,28 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         .context("Failed to validate repository path");
     }
 
+    // Create cache manager
+    let cache_manager = TempFileManager::new(&ctx.config.path)?;
+
+    // Cleanup old temp files (24-hour threshold)
+    let cleanup_result =
+        cache_manager.cleanup_old_temp_files(std::time::Duration::from_secs(24 * 3600))?;
+    if cleanup_result.deleted > 0 {
+        tracing::info!("Cleaned up {} old temp files", cleanup_result.deleted);
+    }
+
+    // Ensure .ruley/ is in .gitignore
+    utils::cache::ensure_gitignore_entry(&ctx.config.path)?;
+
+    // Load previous state
+    let loaded_state = utils::state::load_state(cache_manager.ruley_dir())?;
+    if let Some(ref state) = loaded_state {
+        tracing::debug!("Loaded previous state from {:?}", state.last_run);
+    }
+
+    ctx.cache_manager = Some(cache_manager);
+    ctx.loaded_state = loaded_state;
+
     // Check for dry-run mode
     if ctx.config.dry_run {
         if !ctx.config.quiet {
@@ -306,6 +351,22 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         tracing::info!("Discovered {} files", entries.len());
         entries
     };
+
+    // Write scanned files to cache (for debugging/recovery)
+    if let Some(ref cache) = ctx.cache_manager {
+        // Convert FileEntry to CachedFileEntry for serialization
+        let cached_entries: Vec<utils::cache::CachedFileEntry> = file_entries
+            .iter()
+            .map(|e| utils::cache::CachedFileEntry {
+                path: e.path.clone(),
+                size: e.size,
+                language: e.language.as_ref().map(|l| format!("{:?}", l)),
+            })
+            .collect();
+        let path = cache.write_scanned_files(&cached_entries)?;
+        ctx.temp_files.add(path);
+        tracing::debug!("Cached scanned files list");
+    }
 
     // Validate repomix file exists if specified
     if let Some(ref path) = ctx.config.repomix_file
@@ -336,6 +397,22 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     };
 
     ctx.compressed_codebase = Some(compressed_codebase);
+
+    // Write compressed codebase summary to cache
+    if let Some(ref cache) = ctx.cache_manager {
+        if let Some(ref codebase) = ctx.compressed_codebase {
+            // Create a summary string of the compressed codebase for caching
+            let summary = format!(
+                "Files: {}\nTotal size: {} bytes\nCompression ratio: {:.2}",
+                codebase.metadata.total_files,
+                codebase.metadata.total_compressed_size,
+                codebase.metadata.compression_ratio
+            );
+            let path = cache.write_compressed_codebase(&summary)?;
+            ctx.temp_files.add(path);
+            tracing::debug!("Cached compressed codebase summary");
+        }
+    }
 
     // Stage 4: Analyzing
     ctx.transition_to(PipelineStage::Analyzing);
@@ -638,6 +715,44 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 10: Cleanup
     ctx.transition_to(PipelineStage::Cleanup);
+
+    // Save state and cleanup temp files
+    if let Some(ref cache) = ctx.cache_manager {
+        // Build state from context
+        let state = utils::state::State {
+            version: utils::state::CURRENT_STATE_VERSION.to_string(),
+            last_run: Utc::now(),
+            user_selections: utils::state::UserSelections::default(),
+            output_files: Vec::new(), // TODO: Track output files in ctx
+            cost_spent: ctx
+                .cost_tracker
+                .as_ref()
+                .map(|t| t.summary().total_cost as f32)
+                .unwrap_or(0.0),
+            token_count: ctx
+                .compressed_codebase
+                .as_ref()
+                .map(|c| c.metadata.total_original_size)
+                .unwrap_or(0),
+            compression_ratio: ctx
+                .compressed_codebase
+                .as_ref()
+                .map(|c| c.metadata.compression_ratio)
+                .unwrap_or(1.0),
+        };
+
+        // Save state
+        utils::state::save_state(&state, cache.ruley_dir())?;
+        tracing::info!("Saved state to .ruley/state.json");
+
+        // Clean up temp files (preserve state.json)
+        let cleanup_result = cache.cleanup_temp_files(true)?;
+        if cleanup_result.deleted > 0 {
+            tracing::debug!("Cleaned up {} temp files", cleanup_result.deleted);
+        }
+    }
+
+    // Also call the existing cleanup_temp_files function for TempFileRefs
     cleanup_temp_files(&mut ctx).context("Failed to cleanup temporary files")?;
 
     // Pipeline Complete

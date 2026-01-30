@@ -82,6 +82,9 @@ pub enum RuleyError {
 
     #[error("Cache error: {0}")]
     Cache(String),
+
+    #[error("State error: {0}")]
+    State(String),
 }
 
 /// Redact sensitive information from error messages.

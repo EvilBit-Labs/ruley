@@ -43,6 +43,7 @@ pub mod packer;
 pub mod utils;
 
 use anyhow::{Context, Result};
+use chrono::Utc;
 use cli::config::{ChunkingConfig, ProvidersConfig};
 use llm::chunker::{Chunk, ChunkConfig};
 use llm::client::LLMClient;
@@ -700,6 +701,44 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 10: Cleanup
     ctx.transition_to(PipelineStage::Cleanup);
+
+    // Save state and cleanup temp files
+    if let Some(ref cache) = ctx.cache_manager {
+        // Build state from context
+        let state = utils::state::State {
+            version: utils::state::CURRENT_STATE_VERSION.to_string(),
+            last_run: Utc::now(),
+            user_selections: utils::state::UserSelections::default(),
+            output_files: Vec::new(), // TODO: Track output files in ctx
+            cost_spent: ctx
+                .cost_tracker
+                .as_ref()
+                .map(|t| t.summary().total_cost as f32)
+                .unwrap_or(0.0),
+            token_count: ctx
+                .compressed_codebase
+                .as_ref()
+                .map(|c| c.metadata.total_original_size)
+                .unwrap_or(0),
+            compression_ratio: ctx
+                .compressed_codebase
+                .as_ref()
+                .map(|c| c.metadata.compression_ratio)
+                .unwrap_or(1.0),
+        };
+
+        // Save state
+        utils::state::save_state(&state, cache.ruley_dir())?;
+        tracing::info!("Saved state to .ruley/state.json");
+
+        // Clean up temp files (preserve state.json)
+        let cleaned = cache.cleanup_temp_files(true)?;
+        if cleaned > 0 {
+            tracing::debug!("Cleaned up {} temp files", cleaned);
+        }
+    }
+
+    // Also call the existing cleanup_temp_files function for TempFileRefs
     cleanup_temp_files(&mut ctx).context("Failed to cleanup temporary files")?;
 
     // Pipeline Complete

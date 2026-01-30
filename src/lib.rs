@@ -54,6 +54,8 @@ use llm::tokenizer::{TiktokenTokenizer, Tokenizer, TokenizerModel};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use utils::cache::TempFileManager;
+use utils::state::State;
 
 /// Initialize logging based on verbosity level.
 /// This should be called once at application startup.
@@ -232,6 +234,10 @@ pub struct PipelineContext {
     pub generated_rules: Option<generator::GeneratedRules>,
     /// Cost tracking for LLM operations
     pub cost_tracker: Option<CostTracker>,
+    /// Cache manager for .ruley/ directory operations
+    pub cache_manager: Option<TempFileManager>,
+    /// Loaded state from previous runs (for user preferences and metrics)
+    pub loaded_state: Option<State>,
 }
 
 impl PipelineContext {
@@ -247,6 +253,8 @@ impl PipelineContext {
             analysis_result: None,
             generated_rules: None,
             cost_tracker: None,
+            cache_manager: None,
+            loaded_state: None,
         }
     }
 

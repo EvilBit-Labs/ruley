@@ -57,7 +57,7 @@ use std::path::PathBuf;
 use utils::cache::TempFileManager;
 use utils::cost_display::{display_cost_estimate, prompt_confirmation};
 use utils::dry_run::display_dry_run_summary;
-use utils::progress::ProgressManager;
+use utils::progress::{ProgressManager, stages};
 use utils::state::State;
 use utils::summary::display_success_summary;
 
@@ -353,9 +353,22 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         tracing::info!("Repomix file mode active, skipping scanning.");
         vec![] // Empty list, scanning is skipped
     } else {
+        // Start scanning progress (spinner since we don't know total yet)
+        if let Some(ref mut pm) = ctx.progress_manager {
+            let _ = pm.add_stage(stages::SCANNING, 0);
+            pm.update(stages::SCANNING, 0, "discovering files...");
+        }
+
         let entries = packer::scan_files(&ctx.config.path, &ctx.config)
             .await
             .context("Failed to scan repository files")?;
+
+        if let Some(ref pm) = ctx.progress_manager {
+            pm.finish(
+                stages::SCANNING,
+                &format!("Scanned {} files", entries.len()),
+            );
+        }
         tracing::info!("Discovered {} files", entries.len());
         entries
     };
@@ -394,6 +407,13 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 3: Compressing
     ctx.transition_to(PipelineStage::Compressing);
+
+    let file_count = file_entries.len() as u64;
+    if let Some(ref mut pm) = ctx.progress_manager {
+        let _ = pm.add_stage(stages::COMPRESSING, file_count);
+        pm.update(stages::COMPRESSING, 0, "processing...");
+    }
+
     let compressed_codebase = if let Some(path) = &ctx.config.repomix_file {
         packer::parse_repomix(path.as_path())
             .await
@@ -403,6 +423,16 @@ pub async fn run(config: MergedConfig) -> Result<()> {
             .await
             .context("Failed to compress codebase")?
     };
+
+    if let Some(ref pm) = ctx.progress_manager {
+        let ratio = compressed_codebase.metadata.compression_ratio;
+        let msg = format!(
+            "Compressed {} files ({:.0}% reduction)",
+            compressed_codebase.metadata.total_files,
+            (1.0 - ratio) * 100.0
+        );
+        pm.finish(stages::COMPRESSING, &msg);
+    }
 
     ctx.compressed_codebase = Some(compressed_codebase);
 
@@ -527,9 +557,22 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         )?;
     }
 
+    // Start analyzing progress (spinner-based, indeterminate)
+    if let Some(ref mut pm) = ctx.progress_manager {
+        let _ = pm.add_stage(stages::ANALYZING, 0);
+        pm.update(
+            stages::ANALYZING,
+            0,
+            &format!("{} tokens sent", total_tokens),
+        );
+    }
+
     // Perform the analysis
     let analysis_result = perform_analysis(&mut ctx, &client, chunks, &prompt).await?;
 
+    if let Some(ref pm) = ctx.progress_manager {
+        pm.finish(stages::ANALYZING, "Analysis complete");
+    }
     tracing::info!("Analysis complete ({} characters)", analysis_result.len());
 
     // Parse the analysis into GeneratedRules structure
@@ -577,10 +620,17 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         ctx.config.format.len()
     );
 
+    if let Some(ref mut pm) = ctx.progress_manager {
+        let _ = pm.add_stage(stages::FORMATTING, ctx.config.format.len() as u64);
+    }
+
     // Create tokenizer once for cost tracking (avoid recreating per format)
     let refinement_tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
 
-    for format in &ctx.config.format {
+    for (i, format) in ctx.config.format.iter().enumerate() {
+        if let Some(ref pm) = ctx.progress_manager {
+            pm.update(stages::FORMATTING, i as u64, format);
+        }
         tracing::info!("Generating {} format rules", format);
 
         // Determine rule type for this format
@@ -638,6 +688,13 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         tracing::info!("Generated {} format rules successfully", format);
     }
 
+    if let Some(ref pm) = ctx.progress_manager {
+        pm.finish(
+            stages::FORMATTING,
+            &format!("Generated {} format(s)", ctx.config.format.len()),
+        );
+    }
+
     // Log final cost summary after all formats processed
     if let Some(ref tracker) = ctx.cost_tracker {
         let summary = tracker.summary();
@@ -687,6 +744,11 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         .with_backups(true)
         .with_force(ctx.config.no_confirm);
 
+    if let Some(ref mut pm) = ctx.progress_manager {
+        let _ = pm.add_stage(stages::WRITING, ctx.config.format.len() as u64);
+        pm.update(stages::WRITING, 0, "preparing...");
+    }
+
     // Write output files (use spawn_blocking to avoid blocking the async runtime)
     let rules_clone = rules.clone();
     let formats_clone = ctx.config.format.clone();
@@ -702,6 +764,10 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     .await
     .context("Write task panicked")?
     .context("Failed to write output files")?;
+
+    if let Some(ref pm) = ctx.progress_manager {
+        pm.finish(stages::WRITING, &format!("Wrote {} file(s)", results.len()));
+    }
 
     // Report what was written
     for result in &results {
@@ -784,7 +850,7 @@ pub async fn run(config: MergedConfig) -> Result<()> {
             version: utils::state::CURRENT_STATE_VERSION.to_string(),
             last_run: Utc::now(),
             user_selections: utils::state::UserSelections::default(),
-            output_files: Vec::new(), // TODO: Track output files in ctx
+            output_files: results.iter().map(|r| r.path.clone()).collect(),
             cost_spent: ctx
                 .cost_tracker
                 .as_ref()

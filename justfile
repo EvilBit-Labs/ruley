@@ -9,6 +9,10 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 set dotenv-load := true
 set export := true
 
+# Use mise to manage dev tools (cargo, pre-commit, git-cliff, etc.)
+# See mise.toml for tool versions
+mise_exec := "mise exec --"
+
 # Default recipe - list available commands
 default:
     @just --list
@@ -19,11 +23,11 @@ default:
 
 # Format all code
 fmt:
-    cargo fmt
+    {{ mise_exec }} cargo fmt
 
 # Check formatting without modifying files
 fmt-check:
-    cargo fmt -- --check
+    {{ mise_exec }} cargo fmt -- --check
 
 # ==============================================================================
 # Linting
@@ -33,13 +37,13 @@ check: pre-commit lint build-check
 
 # Run clippy with zero warnings policy
 clippy:
-    cargo clippy -- -D warnings
+    {{ mise_exec }} cargo clippy -- -D warnings
 
 # Run full lint suite (format check + clippy)
 lint: fmt-check clippy
 
 pre-commit:
-    pre-commit run --all-files
+    {{ mise_exec }} pre-commit run --all-files
 
 # ==============================================================================
 # Building
@@ -47,15 +51,15 @@ pre-commit:
 
 # Check project without building
 build-check:
-    cargo check
+    {{ mise_exec }} cargo check
 
 # Build the project (debug)
 build:
-    cargo build
+    {{ mise_exec }} cargo build
 
 # Build optimized release binary
 build-release:
-    cargo build --release
+    {{ mise_exec }} cargo build --release
 
 # ==============================================================================
 # Testing
@@ -63,19 +67,19 @@ build-release:
 
 # Run all tests
 test:
-    cargo test
+    {{ mise_exec }} cargo test
 
 # Run tests with output
 test-verbose:
-    cargo test -- --nocapture
+    {{ mise_exec }} cargo test -- --nocapture
 
 # Run benchmarks
 bench:
-    cargo bench
+    {{ mise_exec }} cargo bench
 
 # Run specific benchmark
 bench-name name:
-    cargo bench -- {{ name }}
+    {{ mise_exec }} cargo bench -- {{ name }}
 
 # ==============================================================================
 # Running
@@ -83,11 +87,11 @@ bench-name name:
 
 # Run the CLI with optional arguments
 run args='':
-    cargo run -- {{ args }}
+    {{ mise_exec }} cargo run -- {{ args }}
 
 # Run the release binary with optional arguments
 run-release args='':
-    cargo run --release -- {{ args }}
+    {{ mise_exec }} cargo run --release -- {{ args }}
 
 # ==============================================================================
 # CI
@@ -101,7 +105,7 @@ github-ci-check: lint build test
 
 # Generate changelog from git history
 changelog:
-    git cliff -o CHANGELOG.md
+    {{ mise_exec }} git cliff -o CHANGELOG.md
 
 # ==============================================================================
 # Documentation
@@ -109,11 +113,11 @@ changelog:
 
 # Generate documentation
 doc:
-    cargo doc --no-deps --open --document-private-items
+    {{ mise_exec }} cargo doc --no-deps --open --document-private-items
 
 # Generate documentation (without opening browser)
 doc-build:
-    cargo doc --no-deps --document-private-items
+    {{ mise_exec }} cargo doc --no-deps --document-private-items
 
 # ==============================================================================
 # Dependencies
@@ -121,11 +125,11 @@ doc-build:
 
 # Update dependencies
 update:
-    cargo update
+    {{ mise_exec }} cargo update
 
 # Check for outdated dependencies
 outdated:
-    cargo outdated
+    {{ mise_exec }} cargo outdated
 
 # ==============================================================================
 # Development
@@ -133,7 +137,7 @@ outdated:
 
 # Setup development environment
 dev-setup: fmt
-    cargo build
+    {{ mise_exec }} cargo build
 
 # Full development check (format, lint, test, build)
 dev-check: lint test build
@@ -144,8 +148,8 @@ dev-check: lint test build
 
 # Clean build artifacts
 clean:
-    cargo clean
+    {{ mise_exec }} cargo clean
 
 # Deep clean with verbose output
 clean-all:
-    cargo clean --verbose
+    {{ mise_exec }} cargo clean --verbose

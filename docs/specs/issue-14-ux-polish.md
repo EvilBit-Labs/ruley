@@ -20,7 +20,7 @@ The current ruley CLI lacks user experience polish:
 
 Implement a UX layer that integrates with the existing 10-stage pipeline without modifying core logic:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         UX Layer                                │
 ├─────────────────────────────────────────────────────────────────┤
@@ -96,7 +96,7 @@ pub async fn prompt_confirmation(message: &str) -> Result<bool>;
 
 **Output format** (single chunk):
 
-```
+```text
 Analysis Summary:
 ├─ Files: 127 files (45 TypeScript, 32 Python, 50 other)
 ├─ Tokens: 48,234 (before compression: 156,891)
@@ -114,7 +114,7 @@ Continue? [Y/n]
 
 **Output format** (multi-chunk):
 
-```
+```text
 Analysis Summary:
 ├─ Files: 487 files (234 TypeScript, 123 Python, 130 other)
 ├─ Tokens: 234,567 (before compression: 789,123)
@@ -156,7 +156,7 @@ pub fn format_error(error: &RuleyError, verbose: bool) -> String;
 
 **Error structure**:
 
-```
+```text
 ⚠ Error: {error_type}
 
 What happened:
@@ -175,7 +175,7 @@ For more details, run with --verbose
 
 1. **Missing API Key**:
 
-```
+```text
 ⚠ Error: API key not found
 
 What happened:
@@ -193,9 +193,9 @@ Alternative:
 • Use OpenAI with --provider openai (requires OPENAI_API_KEY)
 ```
 
-2. **Rate Limited**:
+1. **Rate Limited**:
 
-```
+```text
 ⚠ Error: Failed to analyze codebase
 
 What happened:
@@ -209,9 +209,9 @@ Suggestion:
 • Or reduce scope with --include patterns
 ```
 
-3. **Context Limit Exceeded**:
+1. **Context Limit Exceeded**:
 
-```
+```text
 ⚠ Error: Codebase too large
 
 What happened:
@@ -248,7 +248,7 @@ pub fn display_success_summary(
 
 **Output format**:
 
-```
+```text
 ✓ Rules generated successfully
 
 Output Files:
@@ -293,7 +293,7 @@ pub fn display_dry_run_summary(
 
 **Output format**:
 
-```
+```text
 Dry Run - No LLM calls will be made
 
 Files to be analyzed:
@@ -340,7 +340,7 @@ pub struct PipelineContext {
 }
 ```
 
-2. **Stage Integration Points**:
+1. **Stage Integration Points**:
 
    - **Init**: Initialize `ProgressManager` if not `--quiet`
    - **Scanning**: Progress bar for file discovery
@@ -350,7 +350,7 @@ pub struct PipelineContext {
    - **Writing**: Progress bar for output files
    - **Complete**: Success summary display
 
-3. **Replace existing displays**:
+2. **Replace existing displays**:
 
    - Replace `display_dry_run_config()` with `display_dry_run_summary()`
    - Replace simple cost confirmation with `display_cost_estimate()` + `prompt_confirmation()`

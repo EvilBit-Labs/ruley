@@ -2,7 +2,7 @@
 # Cross-platform justfile using OS annotations
 
 set windows-shell := ["powershell.exe", "-c"]
-set shell := ["bash", "-c"]
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 set dotenv-load := true
 set ignore-comments := true
 

@@ -1,3 +1,4 @@
+use crate::utils::formatting::format_number;
 use std::sync::LazyLock;
 use std::time::Duration;
 use thiserror::Error;
@@ -200,9 +201,10 @@ pub fn format_error(error: &RuleyError, verbose: bool) -> String {
     let _ = writeln!(output, "\n\u{26a0} Error: {}", error_title(error));
 
     // What happened section
+    let ctx = error_context_lines(error);
     let _ = writeln!(output, "\nWhat happened:");
-    for (i, line) in error_context_lines(error).iter().enumerate() {
-        let prefix = if i == error_context_lines(error).len() - 1 {
+    for (i, line) in ctx.iter().enumerate() {
+        let prefix = if i == ctx.len() - 1 {
             "\u{2514}\u{2500}"
         } else {
             "\u{251c}\u{2500}"
@@ -541,23 +543,6 @@ fn get_error_source(error: &RuleyError) -> Option<String> {
         RuleyError::FileSystem(err) => Some(err.to_string()),
         _ => None,
     }
-}
-
-/// Format a number with thousand separators.
-fn format_number(n: usize) -> String {
-    let s = n.to_string();
-    let mut result = String::new();
-    let chars: Vec<_> = s.chars().collect();
-    let len = chars.len();
-
-    for (i, c) in chars.iter().enumerate() {
-        if i > 0 && (len - i) % 3 == 0 {
-            result.push(',');
-        }
-        result.push(*c);
-    }
-
-    result
 }
 
 #[cfg(test)]

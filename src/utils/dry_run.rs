@@ -20,6 +20,7 @@ use crate::MergedConfig;
 use crate::llm::provider::Pricing;
 use crate::output::get_formatter;
 use crate::packer::{CompressedCodebase, Language};
+use crate::utils::formatting::format_number;
 use anyhow::Result;
 use console::{Term, style};
 use std::collections::HashMap;
@@ -74,13 +75,20 @@ pub fn display_dry_run_summary(
     languages.sort_by(|a, b| {
         files_by_language
             .get(*b)
-            .map(|v| v.len())
+            .map(|v: &Vec<(String, usize)>| v.len())
             .unwrap_or(0)
-            .cmp(&files_by_language.get(*a).map(|v| v.len()).unwrap_or(0))
+            .cmp(
+                &files_by_language
+                    .get(*a)
+                    .map(|v: &Vec<(String, usize)>| v.len())
+                    .unwrap_or(0),
+            )
     });
 
     for (lang_idx, language) in languages.iter().enumerate() {
-        let files = files_by_language.get(*language).unwrap();
+        let files = files_by_language
+            .get(*language)
+            .expect("files_by_language missing entry for language");
         let token_count = tokens_by_language.get(*language).copied().unwrap_or(0);
         let is_last_language = lang_idx == languages.len() - 1;
 
@@ -153,13 +161,10 @@ pub fn display_dry_run_summary(
         format_number(total_compressed_tokens)
     )?;
 
-    // Compression statistics
+    // Compression statistics (outer if already guarantees compression_ratio > 0.0)
     if codebase.metadata.compression_ratio < 1.0 && codebase.metadata.compression_ratio > 0.0 {
-        let original_tokens = if codebase.metadata.compression_ratio > 0.0 {
-            (total_compressed_tokens as f32 / codebase.metadata.compression_ratio) as usize
-        } else {
-            total_compressed_tokens
-        };
+        let original_tokens =
+            (total_compressed_tokens as f32 / codebase.metadata.compression_ratio) as usize;
         let percent = ((1.0 - codebase.metadata.compression_ratio) * 100.0) as u32;
 
         writeln!(
@@ -226,7 +231,7 @@ fn group_files_by_language(
 
     // Sort files within each language by token count (descending)
     for files in by_language.values_mut() {
-        files.sort_by(|a, b| b.1.cmp(&a.1));
+        files.sort_by(|a: &(String, usize), b: &(String, usize)| b.1.cmp(&a.1));
     }
 
     by_language
@@ -286,23 +291,6 @@ fn get_output_path(format: &str, config: &MergedConfig) -> String {
     } else {
         format!("{}.txt", format)
     }
-}
-
-/// Format a number with thousand separators.
-fn format_number(n: usize) -> String {
-    let s = n.to_string();
-    let mut result = String::new();
-    let chars: Vec<_> = s.chars().collect();
-    let len = chars.len();
-
-    for (i, c) in chars.iter().enumerate() {
-        if i > 0 && (len - i) % 3 == 0 {
-            result.push(',');
-        }
-        result.push(*c);
-    }
-
-    result
 }
 
 #[cfg(test)]

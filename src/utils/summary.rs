@@ -22,6 +22,7 @@
 //! ```
 
 use crate::output::OutputResult;
+use crate::utils::formatting::format_number;
 use anyhow::Result;
 use console::{Term, style};
 use std::io::Write;
@@ -179,23 +180,6 @@ fn format_duration(duration: Duration) -> String {
     } else {
         format!("{:.1}s", secs)
     }
-}
-
-/// Format a number with thousand separators.
-fn format_number(n: usize) -> String {
-    let s = n.to_string();
-    let mut result = String::new();
-    let chars: Vec<_> = s.chars().collect();
-    let len = chars.len();
-
-    for (i, c) in chars.iter().enumerate() {
-        if i > 0 && (len - i) % 3 == 0 {
-            result.push(',');
-        }
-        result.push(*c);
-    }
-
-    result
 }
 
 /// Get a display name for a format.

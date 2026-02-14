@@ -31,6 +31,7 @@ use crate::llm::chunker::Chunk;
 use crate::llm::cost::CostCalculator;
 use crate::llm::provider::Pricing;
 use crate::packer::{CompressedCodebase, Language};
+use crate::utils::formatting::format_number;
 use anyhow::Result;
 use console::{Term, style};
 use std::collections::HashMap;
@@ -112,7 +113,9 @@ pub fn display_cost_estimate(
 
     // Tokens line
     if codebase.metadata.compression_ratio < 1.0 {
-        // Estimate original tokens from compression ratio
+        // When compression_ratio == 0.0, treat total_compressed_tokens as already-uncompressed
+        // to avoid division by zero or infinity. Otherwise derive original_tokens from
+        // total_compressed_tokens / compression_ratio.
         let original_tokens = if codebase.metadata.compression_ratio > 0.0 {
             (total_compressed_tokens as f32 / codebase.metadata.compression_ratio) as usize
         } else {
@@ -296,12 +299,13 @@ fn prompt_confirmation_sync(message: &str, default_yes: bool) -> Result<bool> {
     let prompt = format!("{} {}", message, suffix);
 
     // Use dialoguer for confirmation
+    // Esc/q cancellation returns None; treat explicit cancel as "no" (not default)
     let confirmed = dialoguer::Confirm::new()
         .with_prompt(&prompt)
         .default(default_yes)
         .show_default(false) // We show it in the prompt text
         .interact_opt()?
-        .unwrap_or(default_yes);
+        .unwrap_or(false);
 
     Ok(confirmed)
 }
@@ -390,23 +394,6 @@ fn format_provider_display(provider: &str) -> String {
         "openrouter" => "OpenRouter".to_string(),
         other => other.to_string(),
     }
-}
-
-/// Format a number with thousand separators.
-fn format_number(n: usize) -> String {
-    let s = n.to_string();
-    let mut result = String::new();
-    let chars: Vec<_> = s.chars().collect();
-    let len = chars.len();
-
-    for (i, c) in chars.iter().enumerate() {
-        if i > 0 && (len - i) % 3 == 0 {
-            result.push(',');
-        }
-        result.push(*c);
-    }
-
-    result
 }
 
 #[cfg(test)]

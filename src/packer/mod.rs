@@ -46,7 +46,7 @@ pub struct CompressedFile {
     /// Size of compressed content in bytes
     pub compressed_size: usize,
     /// Detected programming language
-    pub language: Option<compress::Language>,
+    pub language: Option<Language>,
 }
 
 /// Metadata about the entire compressed codebase.
@@ -59,7 +59,7 @@ pub struct CodebaseMetadata {
     /// Total size of compressed content in bytes
     pub total_compressed_size: usize,
     /// File count breakdown by language
-    pub languages: HashMap<compress::Language, usize>,
+    pub languages: HashMap<Language, usize>,
     /// Overall compression ratio (0.0 to 1.0, where lower is better)
     pub compression_ratio: f32,
 }

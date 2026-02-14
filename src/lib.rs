@@ -519,7 +519,7 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Initialize cost tracker
     let pricing = client.pricing();
-    let calculator = CostCalculator::new(pricing);
+    let calculator = CostCalculator::new(pricing.clone());
     ctx.cost_tracker = Some(CostTracker::new(calculator.clone()));
 
     // Build the analysis prompt
@@ -528,7 +528,6 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     // Show cost estimation and confirm (unless --no-confirm)
     if !ctx.config.no_confirm {
         // Display the tree-formatted cost estimate
-        let pricing = client.pricing();
         display_cost_estimate(
             codebase,
             &chunks,
@@ -539,14 +538,13 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         )?;
 
         // Prompt for confirmation
-        let confirmed = prompt_confirmation("Proceed with LLM analysis?", false).await?;
+        let confirmed = prompt_confirmation("Proceed with LLM analysis?", true).await?;
         if !confirmed {
             tracing::info!("User cancelled operation");
             return Ok(());
         }
     } else if !ctx.config.quiet {
         // Just show the summary without confirmation
-        let pricing = client.pricing();
         display_cost_estimate(
             codebase,
             &chunks,

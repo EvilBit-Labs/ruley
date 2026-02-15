@@ -3,7 +3,8 @@
 /// Format a number with thousand separators.
 pub fn format_number(n: usize) -> String {
     let s = n.to_string();
-    let mut result = String::new();
+    // Pre-allocate for digits + commas (one comma per 3 digits)
+    let mut result = String::with_capacity(s.len() + s.len() / 3);
     let chars: Vec<_> = s.chars().collect();
     let len = chars.len();
 

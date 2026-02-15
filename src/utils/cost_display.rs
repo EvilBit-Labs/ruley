@@ -276,6 +276,8 @@ pub fn display_cost_estimate(
 pub async fn prompt_confirmation(message: &str, default_yes: bool) -> Result<bool> {
     // Use spawn_blocking since dialoguer is synchronous
     let message = message.to_string();
+    // First `?` unwraps the JoinError from spawn_blocking,
+    // second `?` unwraps the Result from prompt_confirmation_sync.
     let result =
         tokio::task::spawn_blocking(move || prompt_confirmation_sync(&message, default_yes))
             .await??;
@@ -450,15 +452,6 @@ mod tests {
                 overlap_token_count: if i > 0 { 1000 } else { 0 },
             })
             .collect()
-    }
-
-    #[test]
-    fn test_format_number() {
-        assert_eq!(format_number(0), "0");
-        assert_eq!(format_number(999), "999");
-        assert_eq!(format_number(1000), "1,000");
-        assert_eq!(format_number(1234567), "1,234,567");
-        assert_eq!(format_number(48234), "48,234");
     }
 
     #[test]

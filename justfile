@@ -10,8 +10,6 @@ set ignore-comments := true
 # See mise.toml for tool versions
 mise_exec := "mise exec --"
 
-root := justfile_dir()
-
 # =============================================================================
 # GENERAL COMMANDS
 # =============================================================================

@@ -262,15 +262,19 @@ fn estimate_tokens(content: &str) -> usize {
     content.len().div_ceil(4)
 }
 
+/// Estimated output tokens per analysis call.
+const ESTIMATED_OUTPUT_TOKENS: usize = 4096;
+
+/// Estimated tokens per format refinement call.
+const TOKENS_PER_FORMAT: usize = 500;
+
 /// Estimate the cost for the dry run.
 fn estimate_cost(input_tokens: usize, format_count: usize, pricing: &Pricing) -> f64 {
-    // Estimate output tokens (roughly 1:1 for analysis)
-    let output_tokens = 4096;
-    // Format refinement tokens
-    let format_tokens = format_count * 500;
+    let format_tokens = format_count * TOKENS_PER_FORMAT;
 
     let input_cost = (input_tokens as f64 / 1000.0) * pricing.input_per_1k;
-    let output_cost = ((output_tokens + format_tokens) as f64 / 1000.0) * pricing.output_per_1k;
+    let output_cost =
+        ((ESTIMATED_OUTPUT_TOKENS + format_tokens) as f64 / 1000.0) * pricing.output_per_1k;
 
     input_cost + output_cost
 }
@@ -381,15 +385,6 @@ mod tests {
                 compression_ratio: 0.87,
             },
         }
-    }
-
-    #[test]
-    fn test_format_number() {
-        assert_eq!(format_number(0), "0");
-        assert_eq!(format_number(999), "999");
-        assert_eq!(format_number(1000), "1,000");
-        assert_eq!(format_number(12345), "12,345");
-        assert_eq!(format_number(1234567), "1,234,567");
     }
 
     #[test]

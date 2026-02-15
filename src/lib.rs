@@ -1019,6 +1019,8 @@ fn get_context_limit(provider: &str, _model: Option<&str>) -> usize {
 /// Get default pricing for a provider when API key is not available.
 ///
 /// Used in dry-run mode to show cost estimates without requiring credentials.
+/// These are approximate prices and may not reflect current API billing.
+/// For accurate estimates, run without `--dry-run` with valid API credentials.
 fn get_default_pricing(provider: &str) -> llm::provider::Pricing {
     use llm::provider::Pricing;
 

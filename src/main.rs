@@ -57,7 +57,9 @@ fn display_error(error: &anyhow::Error, verbose: bool) {
     }
 
     eprintln!();
-    eprintln!("Temp files preserved in .ruley/ for debugging");
+    if std::path::Path::new(".ruley").exists() {
+        eprintln!("Temp files preserved in .ruley/ for debugging");
+    }
 }
 
 async fn run_main() -> Result<()> {

@@ -21,3 +21,5 @@ Thumbs.db
 /tests/fixtures/**/node_modules/
 /tests/fixtures/**/target/
 /tests/fixtures/**/dist/
+
+.claude.local.md

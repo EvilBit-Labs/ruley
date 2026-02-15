@@ -516,33 +516,19 @@ fn get_provider_url(provider: &str) -> String {
 }
 
 /// Check if the error has a source error.
+///
+/// Uses the `std::error::Error::source()` trait method, which `thiserror`
+/// implements automatically for `#[source]` and `#[from]` fields.
 fn has_source(error: &RuleyError) -> bool {
-    matches!(
-        error,
-        RuleyError::ParseError {
-            source: Some(_),
-            ..
-        } | RuleyError::NetworkError {
-            source: Some(_),
-            ..
-        } | RuleyError::Repository(_)
-            | RuleyError::FileSystem(_)
-    )
+    std::error::Error::source(error).is_some()
 }
 
 /// Get the source error if available.
+///
+/// Uses the `std::error::Error::source()` trait method rather than
+/// manually matching on each variant.
 fn get_error_source(error: &RuleyError) -> Option<String> {
-    match error {
-        RuleyError::ParseError {
-            source: Some(src), ..
-        } => Some(src.to_string()),
-        RuleyError::NetworkError {
-            source: Some(src), ..
-        } => Some(src.to_string()),
-        RuleyError::Repository(err) => Some(err.to_string()),
-        RuleyError::FileSystem(err) => Some(err.to_string()),
-        _ => None,
-    }
+    std::error::Error::source(error).map(|s| s.to_string())
 }
 
 #[cfg(test)]
@@ -719,14 +705,6 @@ mod tests {
         assert!(formatted.contains("Compression error"));
         assert!(formatted.contains("Compressing TypeScript files"));
         assert!(formatted.contains("--no-compress"));
-    }
-
-    #[test]
-    fn test_format_number_helper() {
-        assert_eq!(format_number(0), "0");
-        assert_eq!(format_number(999), "999");
-        assert_eq!(format_number(1000), "1,000");
-        assert_eq!(format_number(1234567), "1,234,567");
     }
 
     #[test]

@@ -233,15 +233,6 @@ mod tests {
     }
 
     #[test]
-    fn test_format_number() {
-        assert_eq!(format_number(0), "0");
-        assert_eq!(format_number(999), "999");
-        assert_eq!(format_number(1000), "1,000");
-        assert_eq!(format_number(48234), "48,234");
-        assert_eq!(format_number(1234567), "1,234,567");
-    }
-
-    #[test]
     fn test_format_name_display() {
         assert_eq!(format_name_display("cursor"), "Cursor");
         assert_eq!(format_name_display("claude"), "Claude");

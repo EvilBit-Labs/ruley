@@ -182,12 +182,12 @@ impl From<reqwest::Error> for RuleyError {
 /// - Clear error type identification
 /// - Structured "What happened" section with context
 /// - Actionable suggestions for resolution
-/// - Optional verbose mode for full error chain
+/// - Optional verbose mode with error source and debug info
 ///
 /// # Arguments
 ///
 /// * `error` - The error to format
-/// * `verbose` - If true, includes full error chain and debug info
+/// * `verbose` - If true, includes error source and debug representation
 ///
 /// # Returns
 ///

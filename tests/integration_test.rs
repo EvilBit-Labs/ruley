@@ -106,9 +106,8 @@ provider = "openai"
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         // The dry-run mode should complete successfully with provider override
-        // The actual provider used is verified via the config merge logic, not direct output
         assert!(
-            output.status.success() || stdout.contains("Dry Run"),
+            output.status.success(),
             "Dry-run should succeed with CLI provider override: {stdout}"
         );
     }

@@ -112,7 +112,7 @@ impl ProgressManager {
     ///
     /// # Returns
     ///
-    /// A reference to the created `ProgressBar`, allowing direct manipulation if needed.
+    /// The created `ProgressBar`, allowing direct manipulation if needed.
     ///
     /// # Stage Styles
     ///
@@ -126,8 +126,15 @@ impl ProgressManager {
     #[must_use]
     pub fn add_stage(&mut self, name: &str, total: u64) -> ProgressBar {
         let pb = if self.is_tty {
-            let bar = ProgressBar::new(total);
-            self.multi.add(bar)
+            if name == stages::ANALYZING {
+                // Use a spinner for the analyzing stage (indeterminate progress)
+                let spinner = ProgressBar::new_spinner();
+                spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+                self.multi.add(spinner)
+            } else {
+                let bar = ProgressBar::new(total);
+                self.multi.add(bar)
+            }
         } else {
             // In non-TTY mode, create hidden progress bars
             ProgressBar::hidden()

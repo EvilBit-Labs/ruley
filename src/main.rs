@@ -6,7 +6,14 @@ use ruley::{cli, run};
 async fn main() {
     // Try to determine verbose mode early for better error formatting
     // Default to false for early errors (before config is parsed)
-    let verbose = std::env::args().any(|arg| arg == "-v" || arg == "--verbose");
+    let verbose = std::env::args().any(|arg| {
+        // Handle -v, -vv, -vvv, etc. (ArgAction::Count short flags)
+        if arg.starts_with("-v") && !arg.starts_with("--") && arg.chars().skip(1).all(|c| c == 'v')
+        {
+            return true;
+        }
+        arg == "--verbose"
+    });
 
     if let Err(e) = run_main().await {
         display_error(&e, verbose);

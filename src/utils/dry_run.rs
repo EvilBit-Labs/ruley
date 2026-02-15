@@ -161,10 +161,15 @@ pub fn display_dry_run_summary(
         format_number(total_compressed_tokens)
     )?;
 
-    // Compression statistics (outer if already guarantees compression_ratio > 0.0)
+    // Compression statistics
     if codebase.metadata.compression_ratio < 1.0 && codebase.metadata.compression_ratio > 0.0 {
-        let original_tokens =
-            (total_compressed_tokens as f32 / codebase.metadata.compression_ratio) as usize;
+        // Estimate original tokens from actual original content (more accurate than
+        // deriving from byte-based compression_ratio)
+        let original_tokens: usize = codebase
+            .files
+            .iter()
+            .map(|f| estimate_tokens(&f.original_content))
+            .sum();
         let percent = ((1.0 - codebase.metadata.compression_ratio) * 100.0) as u32;
 
         writeln!(

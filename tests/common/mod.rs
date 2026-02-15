@@ -1,6 +1,5 @@
 //! Common test utilities and fixtures for integration tests.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -226,43 +225,4 @@ pub fn run_cli_with_config(dir: &PathBuf, args: &[&str]) -> std::process::Output
     }
 
     cmd.output().expect("Failed to execute command")
-}
-
-/// Parse `--dry-run` output into a `key -> value` map.
-///
-/// The dry-run summary prints lines like:
-/// `Compress:     true`
-/// `Chunk Size:   100000`
-///
-/// This helper extracts those `Key: value` pairs for precise assertions.
-#[allow(dead_code)]
-pub fn parse_dry_run_output(stdout: &str) -> HashMap<String, String> {
-    let mut parsed = HashMap::new();
-
-    for line in stdout.lines() {
-        let Some((key, value)) = line.split_once(':') else {
-            continue;
-        };
-
-        let key = key.trim();
-        if key.is_empty() {
-            continue;
-        }
-
-        let mut value = value.trim().to_string();
-
-        // Normalize common cases for stability in assertions.
-        if let Some(stripped) = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
-            value = stripped.to_string();
-        }
-        if value.eq_ignore_ascii_case("true") {
-            value = "true".to_string();
-        } else if value.eq_ignore_ascii_case("false") {
-            value = "false".to_string();
-        }
-
-        parsed.insert(key.to_string(), value);
-    }
-
-    parsed
 }

@@ -113,14 +113,13 @@ pub fn display_cost_estimate(
 
     // Tokens line
     if codebase.metadata.compression_ratio < 1.0 {
-        // When compression_ratio == 0.0, treat total_compressed_tokens as already-uncompressed
-        // to avoid division by zero or infinity. Otherwise derive original_tokens from
-        // total_compressed_tokens / compression_ratio.
-        let original_tokens = if codebase.metadata.compression_ratio > 0.0 {
-            (total_compressed_tokens as f32 / codebase.metadata.compression_ratio) as usize
-        } else {
-            total_compressed_tokens
-        };
+        // Estimate original tokens from actual original content (more accurate than
+        // deriving from byte-based compression_ratio)
+        let original_tokens: usize = codebase
+            .files
+            .iter()
+            .map(|f| estimate_tokens_from_content(&f.original_content))
+            .sum();
         writeln!(
             term,
             "{} Tokens: {} (before compression: {})",
@@ -321,6 +320,11 @@ struct CostBreakdownDisplay {
     merge_cost: f64,
     /// Cost for format refinement calls
     format_refinement_cost: f64,
+}
+
+/// Estimate token count from content using a ~4 chars per token heuristic.
+fn estimate_tokens_from_content(content: &str) -> usize {
+    content.len().div_ceil(4)
 }
 
 /// Calculate the cost breakdown for display.

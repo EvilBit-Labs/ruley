@@ -551,10 +551,7 @@ mod tests {
                     }),
                 }
             } else {
-                Ok(CompletionResponse {
-                    content: "Success".to_string(),
-                    tokens_used: 10,
-                })
+                Ok(CompletionResponse::new("Success".to_string(), 5, 5))
             }
         }
 

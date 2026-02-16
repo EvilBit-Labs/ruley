@@ -199,10 +199,11 @@ impl LLMProvider for AnthropicProvider {
             .collect::<Vec<_>>()
             .join("");
 
-        Ok(CompletionResponse {
+        Ok(CompletionResponse::new(
             content,
-            tokens_used: response_body.usage.input_tokens + response_body.usage.output_tokens,
-        })
+            response_body.usage.input_tokens,
+            response_body.usage.output_tokens,
+        ))
     }
 
     fn model(&self) -> &str {
@@ -211,8 +212,8 @@ impl LLMProvider for AnthropicProvider {
 
     fn pricing(&self) -> Pricing {
         Pricing {
-            input_per_1k: 3.0,
-            output_per_1k: 15.0,
+            input_per_1k: 0.003,  // $0.003 per 1K input tokens
+            output_per_1k: 0.015, // $0.015 per 1K output tokens
         }
     }
 }

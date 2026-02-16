@@ -22,17 +22,27 @@ use std::collections::HashMap;
 /// Rule application type for Cursor format.
 ///
 /// Determines how and when rules are applied during AI assistance.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "lowercase")]
+#[value(rename_all = "lowercase")]
 pub enum RuleType {
     /// Always apply these rules to all interactions
-    AlwaysApply,
+    #[serde(alias = "AlwaysApply", alias = "always_apply")]
+    #[value(name = "always", help = "Always Apply")]
+    Always,
     /// Apply rules intelligently based on context
     #[default]
-    ApplyIntelligently,
+    #[serde(alias = "ApplyIntelligently", alias = "auto")]
+    #[value(name = "auto", help = "Apply Intelligently")]
+    Auto,
     /// Apply only to files matching specific patterns
-    ApplyToSpecificFiles,
+    #[serde(alias = "ApplyToSpecificFiles", alias = "specific")]
+    #[value(name = "files", help = "Apply to Specific Files")]
+    Files,
     /// Apply only when manually invoked
-    ApplyManually,
+    #[serde(alias = "ApplyManually", alias = "apply_manually")]
+    #[value(name = "manual", help = "Apply Manually")]
+    Manual,
 }
 
 impl std::str::FromStr for RuleType {
@@ -40,23 +50,33 @@ impl std::str::FromStr for RuleType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "always" | "alwaysapply" | "always_apply" => Ok(Self::AlwaysApply),
-            "auto" | "intelligent" | "applyintelligently" => Ok(Self::ApplyIntelligently),
-            "files" | "specific" | "applytospecificfiles" => Ok(Self::ApplyToSpecificFiles),
-            "manual" | "applymanually" => Ok(Self::ApplyManually),
+            "always" | "alwaysapply" | "always_apply" => Ok(Self::Always),
+            "auto" | "intelligent" | "applyintelligently" => Ok(Self::Auto),
+            "files" | "specific" | "applytospecificfiles" => Ok(Self::Files),
+            "manual" | "applymanually" => Ok(Self::Manual),
             _ => Err(format!("unknown rule type: '{}'", s)),
         }
     }
 }
 
 impl RuleType {
-    /// Convert to string for use in prompts and output.
+    /// Human-friendly label for use in prompts and output.
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::AlwaysApply => "Always Apply",
-            Self::ApplyIntelligently => "Apply Intelligently",
-            Self::ApplyToSpecificFiles => "Apply to Specific Files",
-            Self::ApplyManually => "Apply Manually",
+            Self::Always => "Always Apply",
+            Self::Auto => "Apply Intelligently",
+            Self::Files => "Apply to Specific Files",
+            Self::Manual => "Apply Manually",
+        }
+    }
+
+    /// Machine-readable slug for use in config values and prompt logic.
+    pub fn slug(&self) -> &'static str {
+        match self {
+            Self::Always => "always",
+            Self::Auto => "auto",
+            Self::Files => "files",
+            Self::Manual => "manual",
         }
     }
 }
@@ -258,13 +278,13 @@ pub fn parse_analysis_response(
 /// - Generic: ApplyIntelligently (universal default)
 pub fn get_default_rule_type(format: &str) -> RuleType {
     match format.to_lowercase().as_str() {
-        "cursor" => RuleType::ApplyIntelligently,
-        "claude" => RuleType::AlwaysApply,
-        "copilot" => RuleType::ApplyIntelligently,
-        "windsurf" => RuleType::ApplyIntelligently,
-        "aider" => RuleType::ApplyIntelligently,
-        "generic" => RuleType::ApplyIntelligently,
-        _ => RuleType::ApplyIntelligently,
+        "cursor" => RuleType::Auto,
+        "claude" => RuleType::Always,
+        "copilot" => RuleType::Auto,
+        "windsurf" => RuleType::Auto,
+        "aider" => RuleType::Auto,
+        "generic" => RuleType::Auto,
+        _ => RuleType::Auto,
     }
 }
 
@@ -354,19 +374,10 @@ mod tests {
 
     #[test]
     fn test_rule_type_from_str() {
-        assert_eq!("always".parse::<RuleType>().unwrap(), RuleType::AlwaysApply);
-        assert_eq!(
-            "auto".parse::<RuleType>().unwrap(),
-            RuleType::ApplyIntelligently
-        );
-        assert_eq!(
-            "files".parse::<RuleType>().unwrap(),
-            RuleType::ApplyToSpecificFiles
-        );
-        assert_eq!(
-            "manual".parse::<RuleType>().unwrap(),
-            RuleType::ApplyManually
-        );
+        assert_eq!("always".parse::<RuleType>().unwrap(), RuleType::Always);
+        assert_eq!("auto".parse::<RuleType>().unwrap(), RuleType::Auto);
+        assert_eq!("files".parse::<RuleType>().unwrap(), RuleType::Files);
+        assert_eq!("manual".parse::<RuleType>().unwrap(), RuleType::Manual);
         // Unknown values return an error
         assert!("unknown".parse::<RuleType>().is_err());
         assert!("invalid".parse::<RuleType>().is_err());
@@ -374,8 +385,33 @@ mod tests {
 
     #[test]
     fn test_rule_type_as_str() {
-        assert_eq!(RuleType::AlwaysApply.as_str(), "Always Apply");
-        assert_eq!(RuleType::ApplyIntelligently.as_str(), "Apply Intelligently");
+        assert_eq!(RuleType::Always.as_str(), "Always Apply");
+        assert_eq!(RuleType::Auto.as_str(), "Apply Intelligently");
+    }
+
+    #[test]
+    fn test_rule_type_slug() {
+        assert_eq!(RuleType::Always.slug(), "always");
+        assert_eq!(RuleType::Auto.slug(), "auto");
+        assert_eq!(RuleType::Files.slug(), "files");
+        assert_eq!(RuleType::Manual.slug(), "manual");
+    }
+
+    #[test]
+    fn test_rule_type_serde_roundtrip() {
+        // Serialize uses lowercase due to rename_all
+        let json = serde_json::to_string(&RuleType::Always).unwrap();
+        assert_eq!(json, "\"always\"");
+
+        // Deserialize lowercase strings
+        let rt: RuleType = serde_json::from_str("\"always\"").unwrap();
+        assert_eq!(rt, RuleType::Always);
+        let rt: RuleType = serde_json::from_str("\"auto\"").unwrap();
+        assert_eq!(rt, RuleType::Auto);
+        let rt: RuleType = serde_json::from_str("\"manual\"").unwrap();
+        assert_eq!(rt, RuleType::Manual);
+        let rt: RuleType = serde_json::from_str("\"files\"").unwrap();
+        assert_eq!(rt, RuleType::Files);
     }
 
     #[test]
@@ -388,8 +424,8 @@ mod tests {
 
     #[test]
     fn test_formatted_rules_with_rule_type() {
-        let rules = FormattedRules::with_rule_type("cursor", "# Rules", RuleType::AlwaysApply);
-        assert_eq!(rules.rule_type, Some(RuleType::AlwaysApply));
+        let rules = FormattedRules::with_rule_type("cursor", "# Rules", RuleType::Always);
+        assert_eq!(rules.rule_type, Some(RuleType::Always));
     }
 
     #[test]
@@ -453,23 +489,11 @@ mod tests {
 
     #[test]
     fn test_get_default_rule_type() {
-        assert_eq!(
-            get_default_rule_type("cursor"),
-            RuleType::ApplyIntelligently
-        );
-        assert_eq!(get_default_rule_type("claude"), RuleType::AlwaysApply);
-        assert_eq!(
-            get_default_rule_type("copilot"),
-            RuleType::ApplyIntelligently
-        );
-        assert_eq!(
-            get_default_rule_type("windsurf"),
-            RuleType::ApplyIntelligently
-        );
-        assert_eq!(get_default_rule_type("aider"), RuleType::ApplyIntelligently);
-        assert_eq!(
-            get_default_rule_type("generic"),
-            RuleType::ApplyIntelligently
-        );
+        assert_eq!(get_default_rule_type("cursor"), RuleType::Auto);
+        assert_eq!(get_default_rule_type("claude"), RuleType::Always);
+        assert_eq!(get_default_rule_type("copilot"), RuleType::Auto);
+        assert_eq!(get_default_rule_type("windsurf"), RuleType::Auto);
+        assert_eq!(get_default_rule_type("aider"), RuleType::Auto);
+        assert_eq!(get_default_rule_type("generic"), RuleType::Auto);
     }
 }

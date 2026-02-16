@@ -23,6 +23,7 @@
 //! ```
 
 use crate::cli::args::{Args, ArgsPresence};
+use crate::generator::rules::RuleType;
 use crate::utils::error::RuleyError;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -66,8 +67,8 @@ pub struct GeneralConfig {
     pub chunk_size: usize,
     #[serde(default)]
     pub no_confirm: bool,
-    #[serde(default = "default_rule_type")]
-    pub rule_type: String,
+    #[serde(default)]
+    pub rule_type: RuleType,
 }
 
 fn default_chunk_size() -> usize {
@@ -76,10 +77,6 @@ fn default_chunk_size() -> usize {
 
 fn default_provider() -> String {
     "anthropic".to_string()
-}
-
-fn default_rule_type() -> String {
-    "agent".to_string()
 }
 
 /// Output format and path configuration.
@@ -232,9 +229,9 @@ pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> cra
 
     // Rule type: CLI explicit > config (config always has a value due to default)
     let rule_type = if presence.rule_type {
-        args.rule_type.clone()
+        args.rule_type
     } else {
-        config.general.rule_type.clone()
+        config.general.rule_type
     };
 
     // Compress: CLI explicit > config
@@ -333,7 +330,7 @@ mod tests {
                     compress: true,
                     chunk_size: 50000,
                     no_confirm: false,
-                    rule_type: "manual".to_string(),
+                    rule_type: RuleType::Manual,
                 },
                 output: OutputConfig {
                     formats: vec!["copilot".to_string()],
@@ -366,7 +363,7 @@ mod tests {
                 repomix_file: None,
                 format: vec![OutputFormat::Copilot, OutputFormat::Windsurf],
                 description: None,
-                rule_type: "agent".to_string(),
+                rule_type: RuleType::default(),
                 config: PathBuf::from("ruley.toml"),
                 include: vec!["**/*.ts".to_string()],
                 exclude: vec!["**/node_modules/**".to_string()],
@@ -401,7 +398,7 @@ mod tests {
             // CLI values should win when explicitly provided
             assert_eq!(merged.provider, "anthropic");
             assert_eq!(merged.format, vec!["copilot", "windsurf"]);
-            assert_eq!(merged.rule_type, "agent");
+            assert_eq!(merged.rule_type, RuleType::Auto);
             assert!(!merged.compress);
             assert_eq!(merged.chunk_size, 100000);
             assert!(merged.no_confirm);
@@ -418,7 +415,7 @@ mod tests {
             // Config file values should be used when CLI uses defaults
             assert_eq!(merged.provider, "openai");
             assert_eq!(merged.format, vec!["cursor", "claude"]);
-            assert_eq!(merged.rule_type, "manual");
+            assert_eq!(merged.rule_type, RuleType::Manual);
             assert!(merged.compress);
             assert_eq!(merged.chunk_size, 50000);
             assert!(!merged.no_confirm);

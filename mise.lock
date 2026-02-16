@@ -130,7 +130,7 @@ version = "3.14.3"
 backend = "core:python"
 
 [[tools.rust]]
-version = "1.93.1"
+version = "1.91.0"
 backend = "core:rust"
 
 [[tools.scorecard]]

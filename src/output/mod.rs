@@ -40,7 +40,7 @@ pub use cursor::CursorFormatter;
 pub use generic::GenericFormatter;
 pub use json::JsonFormatter;
 pub use windsurf::WindsurfFormatter;
-pub use writer::{OutputResult, WriteOptions, write_output};
+pub use writer::{ConflictStrategy, OutputResult, WriteOptions, write_output};
 
 use crate::generator::rules::GeneratedRules;
 use crate::utils::error::RuleyError;

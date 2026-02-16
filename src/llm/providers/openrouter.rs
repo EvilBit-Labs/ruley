@@ -43,8 +43,8 @@ impl LLMProvider for OpenRouterProvider {
 
     fn pricing(&self) -> Pricing {
         Pricing {
-            input_per_1k: 3.0,
-            output_per_1k: 15.0,
+            input_per_1k: 0.003,  // Placeholder, varies by model
+            output_per_1k: 0.015, // Placeholder, varies by model
         }
     }
 }

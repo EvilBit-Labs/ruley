@@ -8,9 +8,9 @@
 //! 3. **Compressing** - Optional tree-sitter compression of source files
 //! 4. **Analyzing** - LLM analysis and rule generation
 //! 5. **Formatting** - Converting LLM output to target formats
-//! 6. **Writing** - Writing output files to disk
-//! 7. **Validating** - Validation of generated outputs
-//! 8. **Finalizing** - Post-processing and finalization
+//! 6. **Validating** - Validation of generated outputs
+//! 7. **Finalizing** - Post-processing and finalization
+//! 8. **Writing** - Writing output files to disk
 //! 9. **Reporting** - Reporting and summary generation
 //! 10. **Cleanup** - Cleanup of temporary files and resources
 //!
@@ -45,6 +45,7 @@ pub mod utils;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use cli::config::{ChunkingConfig, ProvidersConfig};
+use generator::rules::RuleType;
 use llm::chunker::{Chunk, ChunkConfig};
 use llm::client::LLMClient;
 use llm::cost::{CostCalculator, CostTracker};
@@ -101,7 +102,7 @@ pub struct MergedConfig {
     /// Description for rule generation (optional)
     pub description: Option<String>,
     /// Rule type to generate
-    pub rule_type: String,
+    pub rule_type: RuleType,
     /// File include patterns
     pub include: Vec<String>,
     /// File exclude patterns
@@ -139,18 +140,36 @@ pub enum PipelineStage {
     Analyzing,
     /// Stage 5: Converting LLM output to target formats
     Formatting,
-    /// Stage 6: Writing output files to disk
-    Writing,
-    /// Stage 7: Validation of generated outputs
+    /// Stage 6: Validation of generated outputs
     Validating,
-    /// Stage 8: Post-processing and finalization
+    /// Stage 7: Post-processing and finalization
     Finalizing,
+    /// Stage 8: Writing output files to disk
+    Writing,
     /// Stage 9: Reporting and summary generation
     Reporting,
     /// Stage 10: Cleanup of temporary files and resources
     Cleanup,
     /// Pipeline completed successfully
     Complete,
+}
+
+impl std::fmt::Display for PipelineStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Init => write!(f, "Init"),
+            Self::Scanning => write!(f, "Scanning"),
+            Self::Compressing => write!(f, "Compressing"),
+            Self::Analyzing => write!(f, "Analyzing"),
+            Self::Formatting => write!(f, "Formatting"),
+            Self::Validating => write!(f, "Validating"),
+            Self::Finalizing => write!(f, "Finalizing"),
+            Self::Writing => write!(f, "Writing"),
+            Self::Reporting => write!(f, "Reporting"),
+            Self::Cleanup => write!(f, "Cleanup"),
+            Self::Complete => write!(f, "Complete"),
+        }
+    }
 }
 
 /// Tracks temporary files created during pipeline execution for cleanup.
@@ -294,7 +313,7 @@ impl PipelineContext {
     /// provides consistent logging for stage transitions.
     pub fn transition_to(&mut self, stage: PipelineStage) {
         self.stage = stage;
-        tracing::info!("Pipeline stage: {:?}", stage);
+        tracing::info!("Pipeline stage: {}", stage);
     }
 }
 
@@ -618,28 +637,15 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         ctx.config.format.len()
     );
 
-    if let Some(ref mut pm) = ctx.progress_manager {
-        let _ = pm.add_stage(stages::FORMATTING, ctx.config.format.len() as u64);
-    }
-
-    // Create tokenizer once for cost tracking (avoid recreating per format)
-    let refinement_tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
-
-    for (i, format) in ctx.config.format.iter().enumerate() {
-        if let Some(ref pm) = ctx.progress_manager {
-            pm.update(stages::FORMATTING, i as u64, format);
-        }
+    for format in &ctx.config.format {
         tracing::info!("Generating {} format rules", format);
 
-        // Determine rule type for this format
-        let rule_type_str = if ctx.config.rule_type.is_empty() {
-            None
-        } else {
-            Some(ctx.config.rule_type.as_str())
-        };
+        // Use machine-readable slug for prompt logic (always_apply computation)
+        let rule_type_slug = ctx.config.rule_type.slug();
 
         // Build refinement prompt for this format
-        let refinement_prompt = generator::build_refinement_prompt(analysis, format, rule_type_str);
+        let refinement_prompt =
+            generator::build_refinement_prompt(analysis, format, Some(rule_type_slug));
 
         // Create messages for LLM call
         let messages = vec![llm::provider::Message {
@@ -653,34 +659,21 @@ pub async fn run(config: MergedConfig) -> Result<()> {
             .await
             .with_context(|| format!("Failed to generate {} format rules", format))?;
 
-        // Track cost for this refinement call
+        // Track cost using provider-reported token counts
         if let Some(ref mut tracker) = ctx.cost_tracker {
-            let input_tokens = refinement_tokenizer.count_tokens(&refinement_prompt);
-            let output_tokens = response.tokens_used;
             tracker.add_operation(
                 format!("format_refinement_{}", format),
-                input_tokens,
-                output_tokens,
+                response.prompt_tokens,
+                response.completion_tokens,
             );
         }
 
-        // Determine rule type for this format
-        let rule_type: generator::RuleType = rule_type_str
-            .map(|s| {
-                s.parse().unwrap_or_else(|_| {
-                    tracing::warn!(
-                        "Invalid rule_type '{}', using default for format '{}'",
-                        s,
-                        format
-                    );
-                    generator::get_default_rule_type(format)
-                })
-            })
-            .unwrap_or_else(|| generator::get_default_rule_type(format));
-
         // Create formatted rules and add to the collection
-        let formatted_rules =
-            generator::FormattedRules::with_rule_type(format, response.content, rule_type);
+        let formatted_rules = generator::FormattedRules::with_rule_type(
+            format,
+            response.content,
+            ctx.config.rule_type,
+        );
         rules.add_format(formatted_rules);
 
         tracing::info!("Generated {} format rules successfully", format);
@@ -705,7 +698,15 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         );
     }
 
-    // Stage 6: Writing
+    // Stage 6: Validating
+    ctx.transition_to(PipelineStage::Validating);
+    // TODO: Implement output validation
+
+    // Stage 7: Finalizing
+    ctx.transition_to(PipelineStage::Finalizing);
+    // TODO: Implement post-processing and finalization
+
+    // Stage 8: Writing
     ctx.transition_to(PipelineStage::Writing);
 
     // Get the generated rules for writing
@@ -787,13 +788,14 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         }
     }
 
-    // Stage 7: Validating
-    ctx.transition_to(PipelineStage::Validating);
-    // TODO: Implement output validation
-
-    // Stage 8: Finalizing
-    ctx.transition_to(PipelineStage::Finalizing);
-    // TODO: Implement post-processing and finalization
+    if !ctx.config.quiet {
+        println!();
+        println!("Output Files Written");
+        println!("====================");
+        for result in &results {
+            println!("  {} -> {}", result.format, result.path.display());
+        }
+    }
 
     // Stage 9: Reporting
     ctx.transition_to(PipelineStage::Reporting);
@@ -1062,52 +1064,53 @@ async fn perform_analysis(
 ) -> Result<String> {
     let num_chunks = chunks.len();
 
-    // Calculate total input tokens from all chunks (includes actual codebase content)
-    let total_input_tokens: usize = chunks.iter().map(|c| c.token_count).sum();
-
     if num_chunks == 1 {
         tracing::info!("Analyzing codebase (single chunk, no merge required)");
-        let result = llm::analysis::analyze_chunked(chunks, prompt, client)
+        let result = llm::analysis::analyze_chunked_with_results(chunks, prompt, client)
             .await
             .context("Failed to analyze codebase")?;
 
-        // Track the operation cost
+        // Track the operation cost using provider-reported token counts
         if let Some(ref mut tracker) = ctx.cost_tracker {
-            let tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
-            let output_tokens = tokenizer.count_tokens(&result);
-            // Include prompt tokens plus the codebase content tokens
-            let prompt_tokens = tokenizer.count_tokens(prompt);
-            tracker.add_operation(
-                "analysis",
-                total_input_tokens + prompt_tokens,
-                output_tokens,
-            );
+            let total_prompt: usize = result.chunk_results.iter().map(|r| r.prompt_tokens).sum();
+            let total_completion: usize = result
+                .chunk_results
+                .iter()
+                .map(|r| r.completion_tokens)
+                .sum();
+            tracker.add_operation("analysis", total_prompt, total_completion);
         }
 
-        Ok(result)
+        Ok(result.merged_analysis)
     } else {
         tracing::info!(
             "Analyzing codebase in {} chunks with merge step",
             num_chunks
         );
-        let result = llm::analysis::analyze_chunked(chunks, prompt, client)
+        let result = llm::analysis::analyze_chunked_with_results(chunks, prompt, client)
             .await
             .context("Failed to analyze chunked codebase")?;
 
-        // Track cost for chunked analysis
-        // Each chunk is analyzed separately, then merged
+        // Track cost using provider-reported token counts (includes all chunks + merge)
         if let Some(ref mut tracker) = ctx.cost_tracker {
-            let tokenizer = get_tokenizer(&ctx.config.provider, ctx.config.model.as_deref())?;
-            let output_tokens = tokenizer.count_tokens(&result);
-            let prompt_tokens = tokenizer.count_tokens(prompt);
-            // Total input = all chunk tokens + prompt overhead per chunk + merge input
-            // Simplification: count total input + prompt per chunk
-            let total_with_prompts = total_input_tokens + (prompt_tokens * num_chunks);
-            tracker.add_operation("chunked_analysis", total_with_prompts, output_tokens);
+            let total_prompt: usize = result.chunk_results.iter().map(|r| r.prompt_tokens).sum();
+            let total_completion: usize = result
+                .chunk_results
+                .iter()
+                .map(|r| r.completion_tokens)
+                .sum();
+            // Add merge step tokens if present
+            let merge_prompt = result.merge_prompt_tokens;
+            let merge_completion = result.merge_completion_tokens;
+            tracker.add_operation(
+                "chunked_analysis",
+                total_prompt + merge_prompt,
+                total_completion + merge_completion,
+            );
         }
 
         tracing::info!("Chunk analysis and merge completed");
 
-        Ok(result)
+        Ok(result.merged_analysis)
     }
 }

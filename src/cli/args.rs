@@ -1,3 +1,4 @@
+use crate::generator::rules::RuleType;
 use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, ValueEnum};
 use std::path::PathBuf;
 
@@ -103,8 +104,8 @@ pub struct Args {
     pub description: Option<String>,
 
     /// Cursor rule type
-    #[arg(long, default_value = "agent", env = "RULEY_RULE_TYPE")]
-    pub rule_type: String,
+    #[arg(long, default_value = "auto", env = "RULEY_RULE_TYPE")]
+    pub rule_type: RuleType,
 
     /// Config file path
     #[arg(short, long, default_value = "ruley.toml", env = "RULEY_CONFIG")]

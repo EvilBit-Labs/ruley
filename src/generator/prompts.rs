@@ -128,12 +128,16 @@ pub fn build_analysis_prompt(codebase: &CompressedCodebase, focus: Option<&str>)
 ///
 /// * `analysis` - The raw analysis from the initial LLM call
 /// * `format` - The target format ("cursor", "claude", "copilot", "windsurf", "aider", "generic")
-/// * `rule_type` - Optional rule type hint (e.g., "always", "auto", "manual")
+/// * `rule_type_slug` - Optional machine-readable slug (e.g., "always", "auto", "manual", "files")
 ///
 /// # Returns
 ///
 /// A prompt string for format-specific refinement.
-pub fn build_refinement_prompt(analysis: &str, format: &str, rule_type: Option<&str>) -> String {
+pub fn build_refinement_prompt(
+    analysis: &str,
+    format: &str,
+    rule_type_slug: Option<&str>,
+) -> String {
     let template = match format.to_lowercase().as_str() {
         "cursor" => cursor_prompt(),
         "claude" => claude_prompt(),
@@ -144,15 +148,24 @@ pub fn build_refinement_prompt(analysis: &str, format: &str, rule_type: Option<&
         _ => generic_prompt(), // Default to generic format
     };
 
-    let rule_type_str = rule_type.unwrap_or("auto");
-    let always_apply = matches!(rule_type_str.to_lowercase().as_str(), "always" | "true");
+    let slug = rule_type_slug.unwrap_or("auto");
+    let always_apply = slug == "always";
+
+    // Compute human-friendly label from slug for display in prompts
+    let rule_type_label = match slug {
+        "always" => "Always Apply",
+        "auto" => "Apply Intelligently",
+        "files" => "Apply to Specific Files",
+        "manual" => "Apply Manually",
+        other => other,
+    };
 
     // Detect primary language from analysis
     let primary_language = detect_primary_language(analysis);
 
     template
         .replace("{{analysis}}", analysis)
-        .replace("{{rule_type}}", rule_type_str)
+        .replace("{{rule_type}}", rule_type_label)
         .replace("{{always_apply}}", &always_apply.to_string())
         .replace("{{primary_language}}", &primary_language)
 }

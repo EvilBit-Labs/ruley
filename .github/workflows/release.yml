@@ -21,7 +21,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Extract version info
         id: version
@@ -82,10 +82,10 @@ jobs:
             archive: zip
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable (2026-02-12)
         with:
           targets: ${{ matrix.target }}
 
@@ -137,7 +137,7 @@ jobs:
           Get-FileHash "dist/$ARCHIVE_NAME.zip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $ARCHIVE_NAME.zip" } | Out-File "dist/$ARCHIVE_NAME.zip.sha256" -Encoding ASCII
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-${{ matrix.target }}
           path: dist/*
@@ -150,13 +150,13 @@ jobs:
     outputs:
       changelog: ${{ steps.read.outputs.changelog }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
       - name: Generate changelog
         id: changelog
-        uses: orhun/git-cliff-action@v3
+        uses: orhun/git-cliff-action@b946ed27a675d653b308f29a7bbad813b85bf7aa # v3
         with:
           config: cliff.toml
           args: --latest --strip header
@@ -177,10 +177,10 @@ jobs:
     needs: [validate, build, changelog]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
           pattern: release-*
@@ -192,7 +192,7 @@ jobs:
           ls -la release/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           name: ruley v${{ needs.validate.outputs.version }}
           body: ${{ needs.changelog.outputs.changelog }}
@@ -209,10 +209,10 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.validate.outputs.prerelease == 'false'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable (2026-02-12)
 
       - name: Publish to crates.io
         run: cargo publish --all-features --locked

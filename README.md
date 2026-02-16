@@ -17,10 +17,10 @@ Tame your unruly codebase. Make it _ruley_.
 ## Installation
 
 ```bash
-# Cargo (crates.io - coming soon)
+# Cargo (crates.io)
 cargo install ruley
 
-# Binary download (coming soon)
+# Binary download
 curl -fsSL https://github.com/EvilBit-Labs/ruley/releases/latest/download/ruley_$(uname -s)_$(uname -m).tar.gz | tar xz
 sudo mv ruley /usr/local/bin/
 ```
@@ -43,9 +43,7 @@ ruley --format cursor,claude,copilot
 
 ## Status
 
-🚧 **Project Status:** Initial development - v0.1.0-spec
-
-This project is currently in the specification phase. Implementation is in progress.
+**Project Status:** Production ready - v1.0.0
 
 ## License
 

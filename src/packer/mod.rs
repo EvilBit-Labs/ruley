@@ -5,7 +5,6 @@ pub mod output;
 pub mod repomix;
 pub mod walker;
 
-use compress::Language;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -115,6 +114,8 @@ impl CompressedCodebase {
     }
 }
 
-pub use compress::{Compressor, TreeSitterCompressor, WhitespaceCompressor, compress_codebase};
+pub use compress::{
+    Compressor, Language, TreeSitterCompressor, WhitespaceCompressor, compress_codebase,
+};
 pub use repomix::parse_repomix;
 pub use walker::{FileEntry, scan_files};

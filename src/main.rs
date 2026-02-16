@@ -1,17 +1,64 @@
 use anyhow::Result;
+use ruley::utils::error::{RuleyError, format_error};
 use ruley::{cli, run};
 
 #[tokio::main]
 async fn main() {
-    if let Err(e) = run_main().await {
-        eprintln!("Error: {}", e);
-        // Display the full error chain for debugging
-        for cause in e.chain().skip(1) {
-            eprintln!("  Caused by: {}", cause);
+    // Try to determine verbose mode early for better error formatting
+    // Default to false for early errors (before config is parsed)
+    let verbose = std::env::args().any(|arg| {
+        // Handle -v, -vv, -vvv, etc. (ArgAction::Count short flags)
+        if arg.starts_with("-v") && !arg.starts_with("--") && arg.chars().skip(1).all(|c| c == 'v')
+        {
+            return true;
         }
-        eprintln!();
-        eprintln!("Temp files preserved in .ruley/ for debugging");
+        arg == "--verbose"
+    });
+
+    if let Err(e) = run_main().await {
+        display_error(&e, verbose);
         std::process::exit(1);
+    }
+}
+
+/// Display an error with contextual formatting.
+///
+/// Tries to downcast to `RuleyError` for rich formatting, falls back to
+/// anyhow's error chain display for other errors.
+fn display_error(error: &anyhow::Error, verbose: bool) {
+    // Try to downcast to RuleyError for rich formatting
+    if let Some(ruley_error) = error.downcast_ref::<RuleyError>() {
+        eprintln!("{}", format_error(ruley_error, verbose));
+    } else {
+        // Fall back to formatted anyhow display
+        eprintln!("\n\u{26a0} Error: {}", error);
+
+        // Display the full error chain
+        let causes: Vec<_> = error.chain().skip(1).collect();
+        if !causes.is_empty() {
+            eprintln!("\nCaused by:");
+            for (i, cause) in causes.iter().enumerate() {
+                let prefix = if i == causes.len() - 1 {
+                    "\u{2514}\u{2500}"
+                } else {
+                    "\u{251c}\u{2500}"
+                };
+                eprintln!("{} {}", prefix, cause);
+            }
+        }
+
+        if verbose {
+            // Show backtrace in verbose mode if available
+            let backtrace = error.backtrace();
+            if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
+                eprintln!("\nBacktrace:\n{}", backtrace);
+            }
+        }
+    }
+
+    eprintln!();
+    if std::path::Path::new(".ruley").exists() {
+        eprintln!("Temp files preserved in .ruley/ for debugging");
     }
 }
 

@@ -348,6 +348,8 @@ mod file_scanning_tests {
             chunking: None,
             output_paths: std::collections::HashMap::new(),
             providers: ruley::cli::config::ProvidersConfig::default(),
+            validation: ruley::cli::config::ValidationConfig::default(),
+            finalization: ruley::cli::config::FinalizationConfig::default(),
         };
 
         // Use the walker to scan files
@@ -458,6 +460,8 @@ mod compression_pipeline_tests {
             chunking: None,
             output_paths: std::collections::HashMap::new(),
             providers: ruley::cli::config::ProvidersConfig::default(),
+            validation: ruley::cli::config::ValidationConfig::default(),
+            finalization: ruley::cli::config::FinalizationConfig::default(),
         };
 
         // Scan files first
@@ -773,6 +777,8 @@ mod fallback_tests {
             chunking: None,
             output_paths: std::collections::HashMap::new(),
             providers: ruley::cli::config::ProvidersConfig::default(),
+            validation: ruley::cli::config::ValidationConfig::default(),
+            finalization: ruley::cli::config::FinalizationConfig::default(),
         };
 
         // Scan and compress - should fall back to whitespace compression on error

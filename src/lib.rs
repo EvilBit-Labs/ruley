@@ -44,7 +44,7 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use cli::config::{ChunkingConfig, ProvidersConfig};
+use cli::config::{ChunkingConfig, FinalizationConfig, ProvidersConfig, ValidationConfig};
 use generator::rules::RuleType;
 use llm::chunker::{Chunk, ChunkConfig};
 use llm::client::LLMClient;
@@ -56,11 +56,9 @@ use llm::tokenizer::{TiktokenTokenizer, Tokenizer, TokenizerModel};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use utils::cache::TempFileManager;
-use utils::cost_display::{display_cost_estimate, prompt_confirmation};
-use utils::dry_run::display_dry_run_summary;
-use utils::progress::{ProgressManager, stages};
+use utils::finalization::FinalizationResult;
 use utils::state::State;
-use utils::summary::display_success_summary;
+use utils::validation::ValidationResult;
 
 /// Initialize logging based on verbosity level.
 /// This should be called once at application startup.
@@ -125,6 +123,10 @@ pub struct MergedConfig {
     pub output_paths: HashMap<String, String>,
     /// Provider-specific configurations
     pub providers: ProvidersConfig,
+    /// Validation stage configuration
+    pub validation: ValidationConfig,
+    /// Finalization stage configuration
+    pub finalization: FinalizationConfig,
 }
 
 /// Tracks the current stage of pipeline execution.
@@ -275,10 +277,10 @@ pub struct PipelineContext {
     pub cache_manager: Option<TempFileManager>,
     /// Loaded state from previous runs (for user preferences and metrics)
     pub loaded_state: Option<State>,
-    /// Progress manager for multi-stage progress bars
-    pub progress_manager: Option<ProgressManager>,
-    /// Start time for elapsed time tracking
-    pub start_time: std::time::Instant,
+    /// Validation results from Stage 6
+    pub validation_results: Vec<ValidationResult>,
+    /// Finalization result from Stage 7
+    pub finalization_result: Option<FinalizationResult>,
 }
 
 impl PipelineContext {
@@ -303,8 +305,8 @@ impl PipelineContext {
             cost_tracker: None,
             cache_manager: None,
             loaded_state: None,
-            progress_manager,
-            start_time: std::time::Instant::now(),
+            validation_results: Vec::new(),
+            finalization_result: None,
         }
     }
 
@@ -533,8 +535,8 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     tracing::info!("Prepared {} chunk(s) for analysis", chunks.len());
 
-    // Create LLM client
-    let client = create_llm_client(&ctx.config)?;
+    // Create LLM client (async for providers that fetch dynamic pricing)
+    let client = create_llm_client(&ctx.config).await?;
 
     // Initialize cost tracker
     let pricing = client.pricing();
@@ -700,11 +702,274 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Stage 6: Validating
     ctx.transition_to(PipelineStage::Validating);
-    // TODO: Implement output validation
+
+    if ctx.config.validation.enabled {
+        tracing::info!("Validating generated rules...");
+
+        let codebase = ctx
+            .compressed_codebase
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No compressed codebase available for validation"))?;
+
+        let rules = ctx
+            .generated_rules
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No generated rules available for validation"))?;
+
+        let project_name = ctx
+            .config
+            .path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("project");
+
+        let validation_results = utils::validation::validate_all_formats(
+            rules,
+            &ctx.config.format,
+            &ctx.config.validation,
+            codebase,
+            project_name,
+        )
+        .context("Failed to validate generated rules")?;
+
+        let has_failures = validation_results.iter().any(|r| !r.passed);
+
+        if has_failures {
+            utils::validation::display_validation_report(&validation_results, ctx.config.quiet);
+
+            if ctx.config.validation.retry_on_failure {
+                // Auto-fix: loop over attempts until validation passes or retries exhausted
+                tracing::info!("Attempting auto-fix for validation failures...");
+
+                let max_retries = ctx.config.validation.max_retries;
+                let mut current_validation = validation_results;
+                let mut total_refinement_cost = 0.0;
+
+                for attempt in 1..=max_retries {
+                    let rules_mut = ctx.generated_rules.as_mut().ok_or_else(|| {
+                        anyhow::anyhow!("No generated rules available for refinement")
+                    })?;
+
+                    // Refine each failed format
+                    for result in &current_validation {
+                        if result.passed {
+                            continue;
+                        }
+
+                        let current_content = rules_mut
+                            .get_format(&result.format)
+                            .map(|f| f.content.clone())
+                            .unwrap_or_default();
+
+                        let (fixed_content, refinement_result) = generator::refine_invalid_output(
+                            &current_content,
+                            &result.errors,
+                            &result.format,
+                            &client,
+                            &mut ctx.cost_tracker,
+                            attempt,
+                            max_retries,
+                        )
+                        .await
+                        .with_context(|| {
+                            format!(
+                                "Failed to refine {} format (attempt {})",
+                                result.format, attempt
+                            )
+                        })?;
+
+                        total_refinement_cost += refinement_result.total_cost;
+
+                        tracing::info!(
+                            "Refinement attempt {} for {}: cost ${:.4}",
+                            attempt,
+                            result.format,
+                            refinement_result.total_cost
+                        );
+
+                        // Update the rules with fixed content
+                        let rule_type = rules_mut
+                            .get_format(&result.format)
+                            .and_then(|f| f.rule_type);
+                        let updated = generator::FormattedRules {
+                            format: result.format.clone(),
+                            content: fixed_content,
+                            rule_type,
+                        };
+                        rules_mut.add_format(updated);
+                    }
+
+                    // Re-validate after this attempt
+                    let rules = ctx.generated_rules.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("No generated rules available for re-validation")
+                    })?;
+
+                    let revalidation_results = utils::validation::validate_all_formats(
+                        rules,
+                        &ctx.config.format,
+                        &ctx.config.validation,
+                        codebase,
+                        project_name,
+                    )
+                    .context("Failed to re-validate after refinement")?;
+
+                    let still_has_failures = revalidation_results.iter().any(|r| !r.passed);
+
+                    if !still_has_failures {
+                        tracing::info!(
+                            "All formats passed validation after {} attempt(s) (total refinement cost: ${:.4})",
+                            attempt,
+                            total_refinement_cost
+                        );
+                        current_validation = revalidation_results;
+                        break;
+                    }
+
+                    if attempt == max_retries {
+                        // Retries exhausted
+                        if !ctx.config.quiet {
+                            utils::validation::display_validation_report(
+                                &revalidation_results,
+                                ctx.config.quiet,
+                            );
+                            println!();
+                            println!(
+                                "Auto-fix could not resolve all validation errors after {} attempt(s) (cost: ${:.4}).",
+                                max_retries, total_refinement_cost
+                            );
+                        }
+
+                        let choice =
+                            prompt_validation_choice(ctx.config.quiet, ctx.config.no_confirm)
+                                .await?;
+                        match choice {
+                            ValidationChoice::Cancel => {
+                                return Err(anyhow::anyhow!(
+                                    "Cancelled due to validation failures"
+                                ));
+                            }
+                            ValidationChoice::WriteAnyway => {
+                                tracing::warn!("Writing files despite validation failures");
+                            }
+                        }
+                    }
+
+                    current_validation = revalidation_results;
+                }
+
+                ctx.validation_results = current_validation;
+            } else {
+                // No auto-fix: prompt user
+                let choice =
+                    prompt_validation_choice(ctx.config.quiet, ctx.config.no_confirm).await?;
+                match choice {
+                    ValidationChoice::Cancel => {
+                        return Err(anyhow::anyhow!("Cancelled due to validation failures"));
+                    }
+                    ValidationChoice::WriteAnyway => {
+                        tracing::warn!("Writing files despite validation failures");
+                    }
+                }
+                ctx.validation_results = validation_results;
+            }
+        } else {
+            if !ctx.config.quiet {
+                tracing::info!("All formats passed validation");
+            }
+            ctx.validation_results = validation_results;
+        }
+    } else {
+        tracing::info!("Validation disabled, skipping");
+    }
 
     // Stage 7: Finalizing
     ctx.transition_to(PipelineStage::Finalizing);
-    // TODO: Implement post-processing and finalization
+
+    if ctx.config.finalization.enabled {
+        tracing::info!("Finalizing rules...");
+
+        let rules = ctx
+            .generated_rules
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("No generated rules available for finalization"))?;
+
+        let (finalized_rules, finalization_result) = utils::finalization::finalize_rules(
+            rules,
+            &ctx.config.finalization,
+            &client,
+            &mut ctx.cost_tracker,
+            &ctx.config.path,
+            &ctx.config.format,
+            ctx.config.no_confirm,
+            ctx.config.quiet,
+        )
+        .await
+        .context("Failed to finalize rules")?;
+
+        if finalization_result.metadata_injected {
+            tracing::debug!("Metadata headers injected");
+        }
+        if finalization_result.deconflicted {
+            tracing::info!("Rules deconflicted with existing rule files");
+        }
+        if finalization_result.optimizations.formatting_normalized {
+            tracing::debug!("Formatting normalized");
+        }
+
+        ctx.generated_rules = Some(finalized_rules);
+        ctx.finalization_result = Some(finalization_result);
+
+        // Post-finalize smoke validation: re-validate with syntax + schema only
+        if ctx.config.validation.enabled {
+            let codebase = ctx.compressed_codebase.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("No compressed codebase available for post-finalize validation")
+            })?;
+            let rules = ctx.generated_rules.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("No generated rules available for post-finalize validation")
+            })?;
+            let project_name = ctx
+                .config
+                .path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("project");
+
+            // Use a config that only checks syntax/schema and file paths
+            let smoke_config = cli::config::ValidationConfig {
+                enabled: true,
+                retry_on_failure: false,
+                max_retries: 0,
+                semantic: cli::config::SemanticValidationConfig {
+                    check_file_paths: true,
+                    check_contradictions: true,
+                    check_consistency: false,
+                    check_reality: false,
+                },
+                format_overrides: cli::config::FormatValidationOverrides::default(),
+            };
+
+            let smoke_results = utils::validation::validate_all_formats(
+                rules,
+                &ctx.config.format,
+                &smoke_config,
+                codebase,
+                project_name,
+            )
+            .context("Post-finalize smoke validation failed")?;
+
+            let smoke_failures = smoke_results.iter().any(|r| !r.passed);
+            if smoke_failures {
+                tracing::warn!(
+                    "Post-finalize validation detected issues (finalization may have introduced errors)"
+                );
+                if !ctx.config.quiet {
+                    utils::validation::display_validation_report(&smoke_results, false);
+                }
+            }
+        }
+    } else {
+        tracing::info!("Finalization disabled, skipping");
+    }
 
     // Stage 8: Writing
     ctx.transition_to(PipelineStage::Writing);
@@ -929,6 +1194,22 @@ fn get_tokenizer(provider: &str, model: Option<&str>) -> Result<Box<dyn Tokenize
                     .context("Failed to create OpenAI tokenizer")?,
             ))
         }
+        #[cfg(feature = "ollama")]
+        "ollama" => {
+            // Ollama uses tiktoken-compatible tokenization
+            Ok(Box::new(
+                TiktokenTokenizer::new(TokenizerModel::Gpt4o)
+                    .context("Failed to create Ollama tokenizer")?,
+            ))
+        }
+        #[cfg(feature = "openrouter")]
+        "openrouter" => {
+            // OpenRouter uses model-specific tokenization, default to cl100k_base
+            Ok(Box::new(
+                TiktokenTokenizer::new(TokenizerModel::Gpt4o)
+                    .context("Failed to create OpenRouter tokenizer")?,
+            ))
+        }
         // Default to cl100k_base for other providers (reasonable approximation)
         _ => Ok(Box::new(
             TiktokenTokenizer::new(TokenizerModel::Gpt4)
@@ -939,6 +1220,9 @@ fn get_tokenizer(provider: &str, model: Option<&str>) -> Result<Box<dyn Tokenize
 
 /// Create an LLM client based on the configuration.
 ///
+/// For OpenRouter, fetches dynamic model pricing from the API so that
+/// cost estimation uses actual provider-supplied rates.
+///
 /// # Arguments
 ///
 /// * `config` - The merged configuration containing provider settings
@@ -947,7 +1231,7 @@ fn get_tokenizer(provider: &str, model: Option<&str>) -> Result<Box<dyn Tokenize
 ///
 /// Returns an error if the provider is not supported or cannot be initialized.
 #[allow(unreachable_code, unused_variables)]
-fn create_llm_client(config: &MergedConfig) -> Result<LLMClient> {
+async fn create_llm_client(config: &MergedConfig) -> Result<LLMClient> {
     let provider: Box<dyn LLMProvider> = match config.provider.to_lowercase().as_str() {
         #[cfg(feature = "anthropic")]
         "anthropic" => {
@@ -996,9 +1280,70 @@ fn create_llm_client(config: &MergedConfig) -> Result<LLMClient> {
                 OpenAIProvider::new(api_key, model).context("Failed to create OpenAI provider")?,
             )
         }
+        #[cfg(feature = "ollama")]
+        "ollama" => {
+            use llm::providers::ollama::OllamaProvider;
+
+            let host = std::env::var("OLLAMA_HOST")
+                .unwrap_or_else(|_| "http://localhost:11434".to_string());
+
+            let host_override = config
+                .providers
+                .ollama
+                .as_ref()
+                .and_then(|p| p.host.clone());
+
+            let final_host = host_override.unwrap_or(host);
+
+            let model = config
+                .model
+                .clone()
+                .or_else(|| {
+                    config
+                        .providers
+                        .ollama
+                        .as_ref()
+                        .and_then(|p| p.model.clone())
+                })
+                .unwrap_or_else(|| "llama3.1:70b".to_string());
+
+            Box::new(
+                OllamaProvider::new(final_host, model)
+                    .context("Failed to create Ollama provider")?,
+            )
+        }
+        #[cfg(feature = "openrouter")]
+        "openrouter" => {
+            use llm::providers::openrouter::OpenRouterProvider;
+
+            let api_key = std::env::var("OPENROUTER_API_KEY")
+                .context("OPENROUTER_API_KEY environment variable not set")?;
+
+            let model = config
+                .model
+                .clone()
+                .or_else(|| {
+                    config
+                        .providers
+                        .openrouter
+                        .as_ref()
+                        .and_then(|p| p.model.clone())
+                })
+                .unwrap_or_else(|| "anthropic/claude-3.5-sonnet".to_string());
+
+            let provider = OpenRouterProvider::new(api_key, model)
+                .context("Failed to create OpenRouter provider")?;
+
+            // Fetch dynamic pricing from OpenRouter's models API
+            if let Err(e) = provider.fetch_model_pricing().await {
+                tracing::warn!("Failed to fetch OpenRouter model pricing: {e}");
+            }
+
+            Box::new(provider)
+        }
         provider => {
             return Err(anyhow::anyhow!(
-                "Unsupported provider '{}'. Supported providers: anthropic, openai",
+                "Unsupported provider '{}'. Supported providers: anthropic, openai, ollama, openrouter",
                 provider
             ));
         }
@@ -1012,9 +1357,11 @@ fn create_llm_client(config: &MergedConfig) -> Result<LLMClient> {
 /// Returns a reasonable default context limit for the provider.
 fn get_context_limit(provider: &str, _model: Option<&str>) -> usize {
     match provider.to_lowercase().as_str() {
-        "anthropic" => 200_000, // Claude models support 200K context
-        "openai" => 128_000,    // GPT-4o supports 128K context
-        _ => 100_000,           // Conservative default
+        "anthropic" => 200_000,  // Claude models support 200K context
+        "openai" => 128_000,     // GPT-4o supports 128K context
+        "ollama" => 100_000,     // Conservative default for local models
+        "openrouter" => 128_000, // Varies by model, use conservative default
+        _ => 100_000,            // Conservative default
     }
 }
 
@@ -1039,6 +1386,52 @@ fn get_default_pricing(provider: &str) -> llm::provider::Pricing {
             input_per_1k: 0.003, // Conservative default
             output_per_1k: 0.015,
         },
+    }
+}
+
+/// User choices when validation fails.
+enum ValidationChoice {
+    /// Cancel the pipeline
+    Cancel,
+    /// Write files despite validation errors
+    WriteAnyway,
+}
+
+/// Prompt the user for a choice when validation fails.
+///
+/// # Arguments
+///
+/// * `quiet` - Whether to suppress output
+/// * `no_confirm` - Whether to skip confirmation (auto-proceed with write)
+async fn prompt_validation_choice(quiet: bool, no_confirm: bool) -> Result<ValidationChoice> {
+    if no_confirm || quiet {
+        return Ok(ValidationChoice::WriteAnyway);
+    }
+
+    println!();
+    println!("Options:");
+    println!("  (c) Cancel - Exit without writing files");
+    println!("  (w) Write anyway - Write files despite validation errors");
+    println!();
+
+    let mut stdout = tokio::io::stdout();
+    stdout
+        .write_all(b"Choice [c/w]: ")
+        .await
+        .context("Failed to write to stdout")?;
+    stdout.flush().await.context("Failed to flush stdout")?;
+
+    let stdin = tokio::io::stdin();
+    let mut reader = BufReader::new(stdin);
+    let mut input = String::new();
+    reader
+        .read_line(&mut input)
+        .await
+        .context("Failed to read user input")?;
+
+    match input.trim().to_lowercase().as_str() {
+        "w" | "write" => Ok(ValidationChoice::WriteAnyway),
+        _ => Ok(ValidationChoice::Cancel),
     }
 }
 

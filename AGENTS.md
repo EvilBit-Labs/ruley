@@ -379,7 +379,8 @@ Follow the **test proportionality principle**: Keep only tests for critical func
 
 - Always use **Rust 2024 Edition**
 - Single crate structure (not a workspace)
-- Enforce lint policy via `[lints.rust]` to forbid unsafe code
+- Enforce lint policy via `[lints.rust]` to deny unsafe code and `[workspace.lints.clippy]` for pedantic clippy rules
+- Clippy config includes: `pedantic`, `nursery`, `cargo` warnings; `unwrap_used` and `panic` denied; see Cargo.toml for full list
 
 ### Dependencies
 

@@ -77,6 +77,18 @@ struct Usage {
     completion_tokens: usize,
 }
 
+/// Response from the Ollama `/api/tags` endpoint listing available models.
+#[derive(Debug, Deserialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaModelInfo>,
+}
+
+/// Model info returned from the `/api/tags` endpoint.
+#[derive(Debug, Deserialize)]
+struct OllamaModelInfo {
+    name: String,
+}
+
 /// Error response from the Ollama API.
 #[derive(Debug, Deserialize)]
 struct OllamaError {
@@ -111,6 +123,51 @@ impl OllamaProvider {
         })
     }
 
+    /// Validates that `self.model` exists on the Ollama server.
+    ///
+    /// Calls `/api/tags` and checks that the configured model appears in the
+    /// response. Returns a `RuleyError::Provider` with a pull suggestion when
+    /// the model is missing.
+    async fn validate_model(&self) -> Result<(), RuleyError> {
+        let url = format!("{}/api/tags", self.host.trim_end_matches('/'));
+
+        let response = self.client.get(&url).send().await.map_err(|e| {
+            if e.is_connect() {
+                RuleyError::Provider {
+                    provider: "ollama".to_string(),
+                    message: "Ollama server not running. Start with: ollama serve".to_string(),
+                }
+            } else {
+                RuleyError::Provider {
+                    provider: "ollama".to_string(),
+                    message: format!("Failed to query Ollama models: {e}"),
+                }
+            }
+        })?;
+
+        let tags: OllamaTagsResponse = response.json().await.map_err(|e| RuleyError::Provider {
+            provider: "ollama".to_string(),
+            message: format!("Failed to parse model list: {e}"),
+        })?;
+
+        let model_exists = tags
+            .models
+            .iter()
+            .any(|m| m.name == self.model || m.name.strip_suffix(":latest") == Some(&self.model));
+
+        if !model_exists {
+            return Err(RuleyError::Provider {
+                provider: "ollama".to_string(),
+                message: format!(
+                    "Model '{}' not found. Pull with: ollama pull {}",
+                    self.model, self.model
+                ),
+            });
+        }
+
+        Ok(())
+    }
+
     /// Creates a new Ollama provider from environment variables.
     ///
     /// Reads the `OLLAMA_HOST` environment variable (default: `http://localhost:11434`).
@@ -132,6 +189,8 @@ impl LLMProvider for OllamaProvider {
         messages: &[Message],
         options: &CompletionOptions,
     ) -> Result<CompletionResponse, RuleyError> {
+        self.validate_model().await?;
+
         let ollama_messages: Vec<OllamaMessage<'_>> = messages
             .iter()
             .map(|m| OllamaMessage {

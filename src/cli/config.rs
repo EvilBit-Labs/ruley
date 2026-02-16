@@ -237,6 +237,8 @@ pub struct OutputConfig {
     pub formats: Vec<String>,
     #[serde(default)]
     pub paths: std::collections::HashMap<String, String>,
+    /// Conflict resolution strategy when output files exist (prompt, overwrite, skip, smart-merge)
+    pub on_conflict: Option<String>,
 }
 
 /// File inclusion patterns.
@@ -445,6 +447,19 @@ pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> cra
         finalization.deconflict = false;
     }
 
+    // On-conflict strategy: CLI explicit > config file > default ("prompt")
+    let on_conflict = if presence.on_conflict {
+        args.on_conflict
+            .clone()
+            .unwrap_or_else(|| "prompt".to_string())
+    } else {
+        config
+            .output
+            .on_conflict
+            .clone()
+            .unwrap_or_else(|| "prompt".to_string())
+    };
+
     crate::MergedConfig {
         provider,
         model: args.model.clone().or(config.general.model),
@@ -467,6 +482,7 @@ pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> cra
         providers: config.providers,
         validation,
         finalization,
+        on_conflict,
     }
 }
 
@@ -512,6 +528,7 @@ mod tests {
                         map.insert("cursor".to_string(), ".cursor/rules/rules.mdc".to_string());
                         map
                     },
+                    on_conflict: None,
                 },
                 include: IncludeConfig {
                     patterns: vec!["**/*.rs".to_string()],
@@ -549,6 +566,7 @@ mod tests {
                 retry_on_validation_failure: false,
                 no_deconflict: false,
                 no_semantic_validation: false,
+                on_conflict: None,
                 verbose: 0,
                 quiet: false,
             }
@@ -565,6 +583,7 @@ mod tests {
                 retry_on_validation_failure: false,
                 no_deconflict: false,
                 no_semantic_validation: false,
+                on_conflict: false,
             }
         }
 
@@ -780,6 +799,7 @@ mod tests {
                         map
                     },
                     formats: vec![],
+                    on_conflict: None,
                 },
                 include: IncludeConfig::default(),
                 exclude: ExcludeConfig::default(),

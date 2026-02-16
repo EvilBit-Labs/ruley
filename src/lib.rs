@@ -127,6 +127,8 @@ pub struct MergedConfig {
     pub validation: ValidationConfig,
     /// Finalization stage configuration
     pub finalization: FinalizationConfig,
+    /// Conflict resolution strategy when output files exist (prompt, overwrite, skip, smart-merge)
+    pub on_conflict: String,
 }
 
 /// Tracks the current stage of pipeline execution.
@@ -1003,30 +1005,34 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         );
     }
 
+    // Parse conflict strategy from config
+    let conflict_strategy = ctx
+        .config
+        .on_conflict
+        .parse::<output::ConflictStrategy>()
+        .unwrap_or(output::ConflictStrategy::Prompt);
+    let is_interactive = console::Term::stdout().is_term();
+
     let write_options = output::WriteOptions::new(&ctx.config.path)
         .with_output_paths(output_paths)
         .with_backups(true)
-        .with_force(ctx.config.no_confirm);
+        .with_conflict_strategy(conflict_strategy)
+        .with_interactive(is_interactive);
 
-    if let Some(ref mut pm) = ctx.progress_manager {
-        let _ = pm.add_stage(stages::WRITING, ctx.config.format.len() as u64);
-        pm.update(stages::WRITING, 0, "preparing...");
-    }
-
-    // Write output files (use spawn_blocking to avoid blocking the async runtime)
-    let rules_clone = rules.clone();
-    let formats_clone = ctx.config.format.clone();
-    let project_name_owned = project_name.to_string();
-    let results = tokio::task::spawn_blocking(move || {
-        output::write_output(
-            &rules_clone,
-            &formats_clone,
-            &project_name_owned,
-            &write_options,
-        )
-    })
+    // Write output files
+    let rules_ref = rules;
+    let formats_ref = &ctx.config.format;
+    let results = output::write_output(
+        rules_ref,
+        formats_ref,
+        project_name,
+        &write_options,
+        Some(&client),
+        &mut ctx.cost_tracker,
+        Some(&calculator),
+        ctx.config.no_confirm,
+    )
     .await
-    .context("Write task panicked")?
     .context("Failed to write output files")?;
 
     if let Some(ref pm) = ctx.progress_manager {
@@ -1035,7 +1041,15 @@ pub async fn run(config: MergedConfig) -> Result<()> {
 
     // Report what was written
     for result in &results {
-        if result.is_new {
+        if result.skipped {
+            tracing::info!("Skipped {} (file exists)", result.format);
+        } else if result.smart_merged {
+            tracing::info!(
+                "Smart merged {} at {}",
+                result.format,
+                result.path.display()
+            );
+        } else if result.is_new {
             tracing::info!("Created {} at {}", result.format, result.path.display());
         } else if result.backup_created {
             tracing::info!(
@@ -1058,7 +1072,20 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         println!("Output Files Written");
         println!("====================");
         for result in &results {
-            println!("  {} -> {}", result.format, result.path.display());
+            if result.skipped {
+                println!("  {} -> SKIPPED (file exists)", result.format);
+            } else if result.smart_merged {
+                println!(
+                    "  {} -> {} (smart merged)",
+                    result.format,
+                    result.path.display()
+                );
+            } else {
+                println!("  {} -> {}", result.format, result.path.display());
+            }
+            if let Some(ref backup_path) = result.backup_path {
+                println!("       backup: {}", backup_path.display());
+            }
         }
     }
 

@@ -350,6 +350,7 @@ mod file_scanning_tests {
             providers: ruley::cli::config::ProvidersConfig::default(),
             validation: ruley::cli::config::ValidationConfig::default(),
             finalization: ruley::cli::config::FinalizationConfig::default(),
+            on_conflict: "prompt".to_string(),
         };
 
         // Use the walker to scan files
@@ -462,6 +463,7 @@ mod compression_pipeline_tests {
             providers: ruley::cli::config::ProvidersConfig::default(),
             validation: ruley::cli::config::ValidationConfig::default(),
             finalization: ruley::cli::config::FinalizationConfig::default(),
+            on_conflict: "prompt".to_string(),
         };
 
         // Scan files first
@@ -779,6 +781,7 @@ mod fallback_tests {
             providers: ruley::cli::config::ProvidersConfig::default(),
             validation: ruley::cli::config::ValidationConfig::default(),
             finalization: ruley::cli::config::FinalizationConfig::default(),
+            on_conflict: "prompt".to_string(),
         };
 
         // Scan and compress - should fall back to whitespace compression on error

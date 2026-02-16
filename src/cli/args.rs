@@ -5,6 +5,9 @@ use std::path::PathBuf;
 /// Supported LLM provider names for CLI validation.
 const SUPPORTED_PROVIDERS: [&str; 4] = ["anthropic", "openai", "ollama", "openrouter"];
 
+/// Supported conflict resolution strategies for CLI validation.
+const SUPPORTED_CONFLICT_STRATEGIES: [&str; 4] = ["prompt", "overwrite", "skip", "smart-merge"];
+
 /// Supported output formats for generated rules.
 /// Each format corresponds to a specific AI IDE tool or configuration style.
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -48,6 +51,8 @@ pub struct ArgsPresence {
     pub no_deconflict: bool,
     /// Whether --no-semantic-validation was explicitly provided
     pub no_semantic_validation: bool,
+    /// Whether --on-conflict was explicitly provided
+    pub on_conflict: bool,
 }
 
 impl ArgsPresence {
@@ -63,6 +68,7 @@ impl ArgsPresence {
             retry_on_validation_failure: is_from_cli(matches, "retry_on_validation_failure"),
             no_deconflict: is_from_cli(matches, "no_deconflict"),
             no_semantic_validation: is_from_cli(matches, "no_semantic_validation"),
+            on_conflict: is_from_cli(matches, "on_conflict"),
         }
     }
 }
@@ -164,6 +170,14 @@ pub struct Args {
     /// Disable all semantic validation checks
     #[arg(long)]
     pub no_semantic_validation: bool,
+
+    /// Conflict resolution strategy when output files exist (prompt, overwrite, skip, smart-merge)
+    #[arg(
+        long,
+        env = "RULEY_ON_CONFLICT",
+        value_parser = clap::builder::PossibleValuesParser::new(SUPPORTED_CONFLICT_STRATEGIES)
+    )]
+    pub on_conflict: Option<String>,
 
     /// Increase verbosity (-v, -vv, -vvv)
     #[arg(short, action = clap::ArgAction::Count)]

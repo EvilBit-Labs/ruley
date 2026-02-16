@@ -1,151 +1,160 @@
 # ruley - Make your codebase ruley
-# Task runner for common development operations
+# Cross-platform justfile using OS annotations
 
-# Cross-platform shell configuration
-# Use bash with strict error handling on Unix-like systems
+set windows-shell := ["powershell.exe", "-c"]
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
-# Use PowerShell on Windows
-set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 set dotenv-load := true
-set export := true
+set ignore-comments := true
 
-# Default recipe - list available commands
+# Use mise to manage all dev tools (cargo, pre-commit, git-cliff, etc.)
+# See mise.toml for tool versions
+mise_exec := "mise exec --"
+
+# =============================================================================
+# GENERAL COMMANDS
+# =============================================================================
+
 default:
     @just --list
 
-# ==============================================================================
-# Formatting
-# ==============================================================================
+# Development setup - mise handles all tool installation via mise.toml
+setup:
+    mise install
+
+# =============================================================================
+# FORMATTING AND LINTING
+# =============================================================================
+
+alias format := fmt
 
 # Format all code
 fmt:
-    cargo fmt
+    @{{ mise_exec }} cargo fmt
 
 # Check formatting without modifying files
 fmt-check:
-    cargo fmt -- --check
+    @{{ mise_exec }} cargo fmt -- --check
 
-# ==============================================================================
-# Linting
-# ==============================================================================
+# Run clippy with zero warnings (default features)
+lint-rust: fmt-check
+    @{{ mise_exec }} cargo clippy --all-targets --all-features -- -D warnings
 
-check: pre-commit lint build-check
+# Run clippy with fixes
+fix:
+    @{{ mise_exec }} cargo clippy --fix --allow-dirty --allow-staged
 
-# Run clippy with zero warnings policy
-clippy:
-    cargo clippy -- -D warnings
+# Main lint recipe - calls all sub-linters
+lint: lint-rust lint-actions
 
-# Run full lint suite (format check + clippy)
-lint: fmt-check clippy
+# Lint GitHub Actions workflow files
+lint-actions:
+    @{{ mise_exec }} actionlint
 
-pre-commit:
-    pre-commit run --all-files
+# Quick development check
+check: pre-commit-run lint
 
-# ==============================================================================
-# Building
-# ==============================================================================
+[private]
+pre-commit-run:
+    @{{ mise_exec }} pre-commit run -a
+
+# =============================================================================
+# BUILDING AND TESTING
+# =============================================================================
+
+build:
+    @{{ mise_exec }} cargo build
+
+build-release:
+    @{{ mise_exec }} cargo build --release
 
 # Check project without building
 build-check:
-    cargo check
+    @{{ mise_exec }} cargo check
 
-# Build the project (debug)
-build:
-    cargo build
-
-# Build optimized release binary
-build-release:
-    cargo build --release
-
-# ==============================================================================
-# Testing
-# ==============================================================================
-
-# Run all tests
 test:
-    cargo test
+    @{{ mise_exec }} cargo test
 
 # Run tests with output
 test-verbose:
-    cargo test -- --nocapture
+    @{{ mise_exec }} cargo test -- --nocapture
 
 # Run benchmarks
 bench:
-    cargo bench
+    @{{ mise_exec }} cargo bench
 
 # Run specific benchmark
 bench-name name:
-    cargo bench -- {{ name }}
+    @{{ mise_exec }} cargo bench -- {{ name }}
 
-# ==============================================================================
-# Running
-# ==============================================================================
+# =============================================================================
+# RUNNING
+# =============================================================================
 
 # Run the CLI with optional arguments
 run args='':
-    cargo run -- {{ args }}
+    @{{ mise_exec }} cargo run -- {{ args }}
 
 # Run the release binary with optional arguments
 run-release args='':
-    cargo run --release -- {{ args }}
+    @{{ mise_exec }} cargo run --release -- {{ args }}
 
-# ==============================================================================
-# CI
-# ==============================================================================
+# =============================================================================
+# SECURITY AND AUDITING
+# =============================================================================
 
-# Run full pre-commit CI check (lint + test + build)
-ci-check: check test build
+audit:
+    @{{ mise_exec }} cargo audit
 
-# Run Github Actions CI check
+# =============================================================================
+# CI AND QUALITY ASSURANCE
+# =============================================================================
+
+# Full local CI parity check
+ci-check: pre-commit-run fmt-check lint-rust test build-release audit
+
+# Run GitHub Actions CI check (no pre-commit or audit)
 github-ci-check: lint build test
 
-# Generate changelog from git history
-changelog:
-    git cliff -o CHANGELOG.md
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
 
-# ==============================================================================
-# Documentation
-# ==============================================================================
-
-# Generate documentation
+# Generate documentation and open in browser
 doc:
-    cargo doc --no-deps --open --document-private-items
+    @{{ mise_exec }} cargo doc --no-deps --open --document-private-items
 
 # Generate documentation (without opening browser)
 doc-build:
-    cargo doc --no-deps --document-private-items
+    @{{ mise_exec }} cargo doc --no-deps --document-private-items
 
-# ==============================================================================
-# Dependencies
-# ==============================================================================
+# =============================================================================
+# DEPENDENCIES
+# =============================================================================
 
 # Update dependencies
 update:
-    cargo update
+    @{{ mise_exec }} cargo update
 
 # Check for outdated dependencies
 outdated:
-    cargo outdated
+    @{{ mise_exec }} cargo outdated
 
-# ==============================================================================
-# Development
-# ==============================================================================
+# =============================================================================
+# RELEASE MANAGEMENT
+# =============================================================================
 
-# Setup development environment
-dev-setup: fmt
-    cargo build
+# Generate changelog from git history
+changelog:
+    @{{ mise_exec }} git cliff -o CHANGELOG.md
 
-# Full development check (format, lint, test, build)
-dev-check: lint test build
-
-# ==============================================================================
-# Cleaning
-# ==============================================================================
+# =============================================================================
+# CLEANING
+# =============================================================================
 
 # Clean build artifacts
 clean:
-    cargo clean
+    @{{ mise_exec }} cargo clean
 
 # Deep clean with verbose output
 clean-all:
-    cargo clean --verbose
+    @{{ mise_exec }} cargo clean --verbose

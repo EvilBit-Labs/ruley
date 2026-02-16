@@ -1,0 +1,8 @@
+# Cargo audit configuration
+# https://github.com/rustsec/rustsec/tree/main/cargo-audit
+
+[advisories]
+# time 0.3.47 requires Rust 1.88+, our MSRV is 1.85
+# Transitive dep via git-cliff-core -> http-cache-semantics
+# Medium severity DoS, not exploitable in our usage
+ignore = ["RUSTSEC-2026-0009"]

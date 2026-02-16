@@ -1,0 +1,12 @@
+[book]
+title = "ruley"
+authors = ["EvilBit Labs"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+git-repository-url = "https://github.com/EvilBit-Labs/ruley"
+edit-url-template = "https://github.com/EvilBit-Labs/ruley/edit/main/docs/{path}"

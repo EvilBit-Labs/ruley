@@ -709,7 +709,7 @@ pub fn greet() -> &'static str {
 mod fallback_tests {
     //! Tests for fallback behavior when compression fails or is unavailable.
 
-    use super::common::{create_mock_project, create_temp_dir};
+    use super::common::create_temp_dir;
     use ruley::packer::compress::{Compressor, Language, WhitespaceCompressor};
 
     /// Test whitespace fallback for unsupported language.
@@ -746,6 +746,7 @@ mod fallback_tests {
     #[tokio::test]
     #[cfg(feature = "compression-typescript")]
     async fn test_invalid_syntax_triggers_fallback() {
+        use super::common::create_mock_project;
         let temp_dir = create_temp_dir();
 
         // Create project with invalid TypeScript file

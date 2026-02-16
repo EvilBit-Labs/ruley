@@ -2,6 +2,9 @@ use crate::generator::rules::RuleType;
 use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, ValueEnum};
 use std::path::PathBuf;
 
+/// Supported LLM provider names for CLI validation.
+const SUPPORTED_PROVIDERS: [&str; 4] = ["anthropic", "openai", "ollama", "openrouter"];
+
 /// Supported output formats for generated rules.
 /// Each format corresponds to a specific AI IDE tool or configuration style.
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -39,6 +42,12 @@ pub struct ArgsPresence {
     pub chunk_size: bool,
     /// Whether --no-confirm was explicitly provided
     pub no_confirm: bool,
+    /// Whether --retry-on-validation-failure was explicitly provided
+    pub retry_on_validation_failure: bool,
+    /// Whether --no-deconflict was explicitly provided
+    pub no_deconflict: bool,
+    /// Whether --no-semantic-validation was explicitly provided
+    pub no_semantic_validation: bool,
 }
 
 impl ArgsPresence {
@@ -51,6 +60,9 @@ impl ArgsPresence {
             compress: is_from_cli(matches, "compress"),
             chunk_size: is_from_cli(matches, "chunk_size"),
             no_confirm: is_from_cli(matches, "no_confirm"),
+            retry_on_validation_failure: is_from_cli(matches, "retry_on_validation_failure"),
+            no_deconflict: is_from_cli(matches, "no_deconflict"),
+            no_semantic_validation: is_from_cli(matches, "no_semantic_validation"),
         }
     }
 }
@@ -73,8 +85,14 @@ pub struct Args {
     #[arg(default_value = ".")]
     pub path: PathBuf,
 
-    /// LLM provider
-    #[arg(short, long, default_value = "anthropic", env = "RULEY_PROVIDER")]
+    /// LLM provider (anthropic, openai, ollama, openrouter)
+    #[arg(
+        short,
+        long,
+        default_value = "anthropic",
+        env = "RULEY_PROVIDER",
+        value_parser = clap::builder::PossibleValuesParser::new(SUPPORTED_PROVIDERS)
+    )]
     pub provider: String,
 
     /// Model to use
@@ -134,6 +152,18 @@ pub struct Args {
     /// Show what would be processed without calling LLM
     #[arg(long, env = "RULEY_DRY_RUN")]
     pub dry_run: bool,
+
+    /// Automatically retry with LLM fix when validation fails
+    #[arg(long)]
+    pub retry_on_validation_failure: bool,
+
+    /// Disable LLM-based deconfliction with existing rule files
+    #[arg(long)]
+    pub no_deconflict: bool,
+
+    /// Disable all semantic validation checks
+    #[arg(long)]
+    pub no_semantic_validation: bool,
 
     /// Increase verbosity (-v, -vv, -vvv)
     #[arg(short, action = clap::ArgAction::Count)]

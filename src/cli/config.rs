@@ -37,6 +37,153 @@ pub struct ChunkingConfig {
     pub overlap: Option<usize>,
 }
 
+/// Serde helper that returns `true`.
+fn default_true() -> bool {
+    true
+}
+
+/// Serde helper that returns the default max retries value (3).
+fn default_max_retries() -> usize {
+    3
+}
+
+/// Configuration for semantic validation checks.
+///
+/// Controls which semantic checks are performed during validation.
+/// Each check can be independently enabled or disabled.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticValidationConfig {
+    /// Check that file paths referenced in rules exist in the codebase
+    #[serde(default = "default_true")]
+    pub check_file_paths: bool,
+    /// Check for contradictory rules (e.g., "use tabs" vs "use spaces")
+    #[serde(default = "default_true")]
+    pub check_contradictions: bool,
+    /// Check cross-format consistency of core conventions
+    #[serde(default = "default_true")]
+    pub check_consistency: bool,
+    /// Check that rules reference actual languages/frameworks in the codebase
+    #[serde(default = "default_true")]
+    pub check_reality: bool,
+}
+
+impl Default for SemanticValidationConfig {
+    fn default() -> Self {
+        Self {
+            check_file_paths: true,
+            check_contradictions: true,
+            check_consistency: true,
+            check_reality: true,
+        }
+    }
+}
+
+/// Per-format overrides for semantic validation configuration.
+///
+/// Allows different formats to have different semantic validation settings.
+/// For example, JSON format may skip file path checks since it's for programmatic use.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FormatValidationOverrides {
+    pub cursor: Option<SemanticValidationConfig>,
+    pub claude: Option<SemanticValidationConfig>,
+    pub copilot: Option<SemanticValidationConfig>,
+    pub windsurf: Option<SemanticValidationConfig>,
+    pub aider: Option<SemanticValidationConfig>,
+    pub generic: Option<SemanticValidationConfig>,
+    pub json: Option<SemanticValidationConfig>,
+}
+
+impl FormatValidationOverrides {
+    /// Get the semantic validation config for a specific format, with fallback to global default.
+    pub fn get_for_format(&self, format: &str) -> Option<&SemanticValidationConfig> {
+        match format.to_lowercase().as_str() {
+            "cursor" => self.cursor.as_ref(),
+            "claude" => self.claude.as_ref(),
+            "copilot" => self.copilot.as_ref(),
+            "windsurf" => self.windsurf.as_ref(),
+            "aider" => self.aider.as_ref(),
+            "generic" => self.generic.as_ref(),
+            "json" => self.json.as_ref(),
+            _ => None,
+        }
+    }
+}
+
+/// Configuration for the validation stage of the pipeline.
+///
+/// Controls whether validation is enabled, retry behavior, and semantic checks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationConfig {
+    /// Whether validation is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Whether to automatically retry with LLM fix on validation failure
+    #[serde(default)]
+    pub retry_on_failure: bool,
+    /// Maximum number of auto-fix retries
+    #[serde(default = "default_max_retries")]
+    pub max_retries: usize,
+    /// Semantic validation configuration
+    #[serde(default)]
+    pub semantic: SemanticValidationConfig,
+    /// Per-format validation overrides
+    #[serde(default)]
+    pub format_overrides: FormatValidationOverrides,
+}
+
+impl Default for ValidationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            retry_on_failure: false,
+            max_retries: 3,
+            semantic: SemanticValidationConfig::default(),
+            format_overrides: FormatValidationOverrides::default(),
+        }
+    }
+}
+
+impl ValidationConfig {
+    /// Get the semantic validation config for a specific format.
+    ///
+    /// Returns the format-specific override if present, otherwise the global semantic config.
+    pub fn semantic_for_format(&self, format: &str) -> &SemanticValidationConfig {
+        self.format_overrides
+            .get_for_format(format)
+            .unwrap_or(&self.semantic)
+    }
+}
+
+/// Configuration for the finalization stage of the pipeline.
+///
+/// Controls post-processing, deconfliction, and metadata injection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FinalizationConfig {
+    /// Whether finalization is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Whether to perform LLM-based deconfliction with existing rules
+    #[serde(default = "default_true")]
+    pub deconflict: bool,
+    /// Whether to normalize formatting (line endings, trailing whitespace)
+    #[serde(default = "default_true")]
+    pub normalize_formatting: bool,
+    /// Whether to inject metadata headers (timestamp, version, provider)
+    #[serde(default = "default_true")]
+    pub inject_metadata: bool,
+}
+
+impl Default for FinalizationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            deconflict: true,
+            normalize_formatting: true,
+            inject_metadata: true,
+        }
+    }
+}
+
 /// Root configuration structure loaded from config files.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -51,6 +198,10 @@ pub struct Config {
     #[serde(default)]
     pub providers: ProvidersConfig,
     pub chunking: Option<ChunkingConfig>,
+    #[serde(default)]
+    pub validation: ValidationConfig,
+    #[serde(default)]
+    pub finalization: FinalizationConfig,
 }
 
 /// General application settings.
@@ -274,6 +425,26 @@ pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> cra
         args.exclude.clone()
     };
 
+    // Validation config: merge CLI flags with config file
+    let mut validation = config.validation;
+    if presence.retry_on_validation_failure {
+        validation.retry_on_failure = args.retry_on_validation_failure;
+    }
+    if presence.no_semantic_validation && args.no_semantic_validation {
+        validation.semantic = SemanticValidationConfig {
+            check_file_paths: false,
+            check_contradictions: false,
+            check_consistency: false,
+            check_reality: false,
+        };
+    }
+
+    // Finalization config: merge CLI flags with config file
+    let mut finalization = config.finalization;
+    if presence.no_deconflict && args.no_deconflict {
+        finalization.deconflict = false;
+    }
+
     crate::MergedConfig {
         provider,
         model: args.model.clone().or(config.general.model),
@@ -294,6 +465,8 @@ pub fn merge_config(args: &Args, config: Config, presence: &ArgsPresence) -> cra
         chunking: config.chunking,
         output_paths: config.output.paths,
         providers: config.providers,
+        validation,
+        finalization,
     }
 }
 
@@ -351,6 +524,8 @@ mod tests {
                     chunk_size: Some(75000),
                     overlap: None,
                 }),
+                validation: ValidationConfig::default(),
+                finalization: FinalizationConfig::default(),
             }
         }
 
@@ -371,6 +546,9 @@ mod tests {
                 chunk_size: 100000,
                 no_confirm: true,
                 dry_run: false,
+                retry_on_validation_failure: false,
+                no_deconflict: false,
+                no_semantic_validation: false,
                 verbose: 0,
                 quiet: false,
             }
@@ -384,6 +562,9 @@ mod tests {
                 compress: true,
                 chunk_size: true,
                 no_confirm: true,
+                retry_on_validation_failure: false,
+                no_deconflict: false,
+                no_semantic_validation: false,
             }
         }
 
@@ -436,6 +617,8 @@ mod tests {
                 exclude: ExcludeConfig::default(),
                 providers: ProvidersConfig::default(),
                 chunking: None,
+                validation: ValidationConfig::default(),
+                finalization: FinalizationConfig::default(),
             };
 
             let args = Args {
@@ -475,6 +658,8 @@ mod tests {
                     chunk_size: Some(75000),
                     overlap: None,
                 }),
+                validation: ValidationConfig::default(),
+                finalization: FinalizationConfig::default(),
             };
 
             let args = Args {
@@ -512,6 +697,8 @@ mod tests {
                     chunk_size: Some(75000),
                     overlap: None,
                 }),
+                validation: ValidationConfig::default(),
+                finalization: FinalizationConfig::default(),
             };
             let presence = ArgsPresence {
                 chunk_size: false,
@@ -534,6 +721,8 @@ mod tests {
                 },
                 providers: ProvidersConfig::default(),
                 chunking: None,
+                validation: ValidationConfig::default(),
+                finalization: FinalizationConfig::default(),
             };
 
             let args = Args {
@@ -562,6 +751,8 @@ mod tests {
                 },
                 providers: ProvidersConfig::default(),
                 chunking: None,
+                validation: ValidationConfig::default(),
+                finalization: FinalizationConfig::default(),
             };
 
             let args = Args {
@@ -594,6 +785,8 @@ mod tests {
                 exclude: ExcludeConfig::default(),
                 providers: ProvidersConfig::default(),
                 chunking: None,
+                validation: ValidationConfig::default(),
+                finalization: FinalizationConfig::default(),
             };
 
             let merged = merge_config(&create_test_args(), config, &ArgsPresence::default());
@@ -621,6 +814,8 @@ mod tests {
                 exclude: ExcludeConfig::default(),
                 providers: ProvidersConfig::default(),
                 chunking: None,
+                validation: ValidationConfig::default(),
+                finalization: FinalizationConfig::default(),
             };
 
             let args = Args {
@@ -646,6 +841,8 @@ mod tests {
                 exclude: ExcludeConfig::default(),
                 providers: ProvidersConfig::default(),
                 chunking: None,
+                validation: ValidationConfig::default(),
+                finalization: FinalizationConfig::default(),
             };
 
             let args = Args {

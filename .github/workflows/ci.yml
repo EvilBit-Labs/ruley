@@ -111,7 +111,7 @@ jobs:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
             - name: Install Rust 1.85
-              uses: dtolnay/rust-toolchain@1.85.0
+              uses: dtolnay/rust-toolchain@ff9b7e97f1c15b93257ad9a20e43c84dc3eef47b # 1.85.0
 
             - name: Check MSRV
               run: cargo check --all-features

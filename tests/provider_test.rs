@@ -438,8 +438,7 @@ mod openrouter_tests {
         let display = error.to_string();
         assert!(
             display.contains("OPENROUTER_API_KEY") || display.contains("openrouter"),
-            "Missing API key error should mention OPENROUTER_API_KEY: {}",
-            display
+            "Missing API key error should mention OPENROUTER_API_KEY"
         );
     }
 

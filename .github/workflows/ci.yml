@@ -7,6 +7,9 @@ on:
         branches: [main]
     workflow_dispatch:
 
+permissions:
+    contents: read
+
 defaults:
     run:
         shell: bash
@@ -29,6 +32,9 @@ jobs:
                   install: true
                   cache: true
                   github_token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Ensure Rust toolchain with components
+              run: rustup toolchain install 1.91.0 --profile default -c rustfmt,clippy
 
             - name: Check formatting
               run: cargo fmt -- --check

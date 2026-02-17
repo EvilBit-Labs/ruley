@@ -42,7 +42,7 @@ jobs:
                   use-admonish: true
 
             - name: Install cargo-binstall
-              uses: cargo-bins/cargo-binstall@main
+              uses: cargo-bins/cargo-binstall@7691a5b29cda4f5499b819e5618012ba4b6c3334 # main
 
             - name: Install mdbook plugins
               run: cargo binstall mdbook-tabs mdbook-i18n-helpers mdbook-yml-header mdbook-image-size --no-confirm

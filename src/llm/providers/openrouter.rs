@@ -206,16 +206,20 @@ impl OpenRouterProvider {
             return Ok(());
         };
 
-        let input_per_token: f64 = api_pricing
-            .prompt
-            .as_deref()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0.0);
-        let output_per_token: f64 = api_pricing
-            .completion
-            .as_deref()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0.0);
+        let input_per_token: f64 = match api_pricing.prompt.as_deref() {
+            Some(s) => s.parse().unwrap_or_else(|e| {
+                tracing::warn!("Failed to parse input pricing '{}': {e}", s);
+                0.0
+            }),
+            None => 0.0,
+        };
+        let output_per_token: f64 = match api_pricing.completion.as_deref() {
+            Some(s) => s.parse().unwrap_or_else(|e| {
+                tracing::warn!("Failed to parse output pricing '{}': {e}", s);
+                0.0
+            }),
+            None => 0.0,
+        };
 
         // Convert per-token to per-1k-token pricing
         let pricing = Pricing {
@@ -230,8 +234,11 @@ impl OpenRouterProvider {
             pricing.output_per_1k
         );
 
-        if let Ok(mut cached) = self.cached_pricing.write() {
-            *cached = pricing;
+        match self.cached_pricing.write() {
+            Ok(mut cached) => *cached = pricing,
+            Err(e) => {
+                tracing::error!("Failed to update cached pricing (RwLock poisoned): {e}");
+            }
         }
 
         Ok(())
@@ -323,12 +330,19 @@ impl LLMProvider for OpenRouterProvider {
             .into_iter()
             .next()
             .and_then(|choice| choice.message.content)
-            .unwrap_or_default();
+            .filter(|c| !c.is_empty())
+            .ok_or_else(|| RuleyError::Provider {
+                provider: "openrouter".to_string(),
+                message: "LLM returned empty response content".to_string(),
+            })?;
 
-        let (prompt_tokens, completion_tokens) = response_body
-            .usage
-            .map(|u| (u.prompt_tokens, u.completion_tokens))
-            .unwrap_or((0, 0));
+        let (prompt_tokens, completion_tokens) = match response_body.usage {
+            Some(u) => (u.prompt_tokens, u.completion_tokens),
+            None => {
+                tracing::warn!("OpenRouter response missing usage data; token counts will be zero");
+                (0, 0)
+            }
+        };
 
         Ok(CompletionResponse::new(
             content,
@@ -342,13 +356,16 @@ impl LLMProvider for OpenRouterProvider {
     }
 
     fn pricing(&self) -> Pricing {
-        self.cached_pricing
-            .read()
-            .map(|p| p.clone())
-            .unwrap_or(Pricing {
-                input_per_1k: 0.0,
-                output_per_1k: 0.0,
-            })
+        match self.cached_pricing.read() {
+            Ok(p) => p.clone(),
+            Err(e) => {
+                tracing::error!("Failed to read cached pricing (RwLock poisoned): {e}");
+                Pricing {
+                    input_per_1k: 0.0,
+                    output_per_1k: 0.0,
+                }
+            }
+        }
     }
 }
 

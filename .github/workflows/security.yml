@@ -29,11 +29,11 @@ jobs:
             - name: Setup Rust
               uses: dtolnay/rust-toolchain@1.91.0
 
-            - uses: taiki-e/install-action@v2
+            - uses: taiki-e/install-action@288875dd3d64326724fa6d9593062d9f8ba0b131 # v2
               with:
                   tool: cargo-outdated,cargo-dist
 
-            - uses: EmbarkStudios/cargo-deny-action@v2
+            - uses: EmbarkStudios/cargo-deny-action@82eb9f621fbc699dd0918f3ea06864c14cc84246 # v2
 
             - name: Run cargo outdated
               run: cargo outdated --depth=1 --exit-code=1

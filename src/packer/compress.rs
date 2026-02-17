@@ -835,7 +835,13 @@ pub async fn compress_codebase(
                     None => {
                         match whitespace_compressor.compress(&original_content, Language::Unknown) {
                             Ok(compressed) => (compressed, super::CompressionMethod::Whitespace),
-                            Err(_) => (original_content.clone(), super::CompressionMethod::None),
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Whitespace compression failed for {}: {e}",
+                                    entry.path.display()
+                                );
+                                (original_content.clone(), super::CompressionMethod::None)
+                            }
                         }
                     }
                 };

@@ -752,7 +752,13 @@ fn generate_backup_path(path: &Path) -> PathBuf {
     let filename = path
         .file_name()
         .map(|s| s.to_string_lossy())
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            tracing::warn!(
+                "Path '{}' has no filename component, using empty name for backup",
+                path.display()
+            );
+            std::borrow::Cow::Borrowed("")
+        });
 
     let simple_backup = path.with_file_name(format!("{}.bak", filename));
 

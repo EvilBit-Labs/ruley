@@ -222,8 +222,8 @@ tree-sitter-typescript = { version = "0.23.2", optional = true }
 [dev-dependencies]
 criterion = { version = "0.8.2", features = [ "html_reports" ] }
 git-cliff = "2.12.0"
-insta     = "1.34"
-mockito   = "1.2"
+insta     = "1.46"
+mockito   = "1.7"
 tempfile  = "3.25.0"
 typos     = "0.10.41"
 

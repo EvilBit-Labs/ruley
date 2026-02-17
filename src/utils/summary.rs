@@ -209,6 +209,8 @@ mod tests {
             backup_created: false,
             backup_path: None,
             is_new: true,
+            skipped: false,
+            smart_merged: false,
         }
     }
 

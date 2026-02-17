@@ -56,8 +56,13 @@ use llm::tokenizer::{TiktokenTokenizer, Tokenizer, TokenizerModel};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use utils::cache::TempFileManager;
+use utils::cost_display::{display_cost_estimate, prompt_confirmation};
+use utils::dry_run::display_dry_run_summary;
 use utils::finalization::FinalizationResult;
+use utils::progress::ProgressManager;
+use utils::progress::stages;
 use utils::state::State;
+use utils::summary::display_success_summary;
 use utils::validation::ValidationResult;
 
 /// Initialize logging based on verbosity level.
@@ -267,6 +272,10 @@ pub struct PipelineContext {
     pub temp_files: TempFileRefs,
     /// Progress tracking (stub for now)
     pub progress: ProgressTracker,
+    /// Multi-stage progress manager for visual feedback
+    pub progress_manager: Option<ProgressManager>,
+    /// Pipeline start time for elapsed time tracking
+    pub start_time: std::time::Instant,
     /// Compressed codebase data
     pub compressed_codebase: Option<packer::CompressedCodebase>,
     /// Analysis result from LLM (populated in Stage 4)
@@ -301,6 +310,8 @@ impl PipelineContext {
             stage: PipelineStage::Init,
             temp_files: TempFileRefs::new(),
             progress: ProgressTracker::new(),
+            progress_manager,
+            start_time: std::time::Instant::now(),
             compressed_codebase: None,
             analysis_result: None,
             generated_rules: None,
@@ -480,9 +491,9 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         if let Some(ref codebase) = ctx.compressed_codebase {
             // Try to get pricing from client, fall back to default pricing
             // (dry-run shouldn't require API keys)
-            let pricing = match create_llm_client(&ctx.config) {
+            let pricing = match create_llm_client(&ctx.config).await {
                 Ok(client) => client.pricing(),
-                Err(_) => get_default_pricing(&ctx.config.provider),
+                Err(_) => default_pricing(&ctx.config.provider),
             };
 
             // Convert Vec<String> to &[String] for display function
@@ -641,7 +652,10 @@ pub async fn run(config: MergedConfig) -> Result<()> {
         ctx.config.format.len()
     );
 
-    for format in &ctx.config.format {
+    for (i, format) in ctx.config.format.iter().enumerate() {
+        if let Some(ref pm) = ctx.progress_manager {
+            pm.update(stages::FORMATTING, i as u64, format);
+        }
         tracing::info!("Generating {} format rules", format);
 
         // Use machine-readable slug for prompt logic (always_apply computation)
@@ -723,7 +737,10 @@ pub async fn run(config: MergedConfig) -> Result<()> {
             .path
             .file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or("project");
+            .unwrap_or_else(|| {
+                tracing::debug!("Could not extract project name from path, using 'project'");
+                "project"
+            });
 
         let validation_results = utils::validation::validate_all_formats(
             rules,
@@ -1245,6 +1262,30 @@ fn get_tokenizer(provider: &str, model: Option<&str>) -> Result<Box<dyn Tokenize
     }
 }
 
+/// Returns default pricing for a given provider when dynamic pricing is unavailable.
+///
+/// Used in dry-run mode where API keys may not be configured.
+fn default_pricing(provider: &str) -> llm::provider::Pricing {
+    match provider.to_lowercase().as_str() {
+        "anthropic" => llm::provider::Pricing {
+            input_per_1k: 0.003,
+            output_per_1k: 0.015,
+        },
+        "openai" => llm::provider::Pricing {
+            input_per_1k: 0.0025,
+            output_per_1k: 0.010,
+        },
+        "ollama" => llm::provider::Pricing {
+            input_per_1k: 0.0,
+            output_per_1k: 0.0,
+        },
+        _ => llm::provider::Pricing {
+            input_per_1k: 0.003,
+            output_per_1k: 0.015,
+        },
+    }
+}
+
 /// Create an LLM client based on the configuration.
 ///
 /// For OpenRouter, fetches dynamic model pricing from the API so that
@@ -1389,30 +1430,6 @@ fn get_context_limit(provider: &str, _model: Option<&str>) -> usize {
         "ollama" => 100_000,     // Conservative default for local models
         "openrouter" => 128_000, // Varies by model, use conservative default
         _ => 100_000,            // Conservative default
-    }
-}
-
-/// Get default pricing for a provider when API key is not available.
-///
-/// Used in dry-run mode to show cost estimates without requiring credentials.
-/// These are approximate prices and may not reflect current API billing.
-/// For accurate estimates, run without `--dry-run` with valid API credentials.
-fn get_default_pricing(provider: &str) -> llm::provider::Pricing {
-    use llm::provider::Pricing;
-
-    match provider.to_lowercase().as_str() {
-        "anthropic" => Pricing {
-            input_per_1k: 0.003, // Claude Sonnet pricing
-            output_per_1k: 0.015,
-        },
-        "openai" => Pricing {
-            input_per_1k: 0.0025, // GPT-4o pricing
-            output_per_1k: 0.01,
-        },
-        _ => Pricing {
-            input_per_1k: 0.003, // Conservative default
-            output_per_1k: 0.015,
-        },
     }
 }
 

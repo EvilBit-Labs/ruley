@@ -35,10 +35,6 @@ fmt:
 fmt-check:
     @{{ mise_exec }} cargo fmt -- --check
 
-# Run clippy with zero warnings (default features)
-lint-rust: fmt-check
-    @{{ mise_exec }} cargo clippy --all-targets --all-features -- -D warnings
-
 # Quick development check
 check: pre-commit lint build-check
 
@@ -72,17 +68,11 @@ fix:
 build-check:
     @{{ mise_exec }} cargo check
 
-# Build the project (debug)
 build:
-    cargo build
+    @{{ mise_exec }} cargo build
 
-# Build optimized release binary
 build-release:
     cargo build --release --all-features
-
-# ==============================================================================
-# Testing
-# ==============================================================================
 
 # Run all tests using nextest
 test:
@@ -154,9 +144,9 @@ dist-check:
 dist:
     cargo dist build
 
-# ==============================================================================
-# Running
-# ==============================================================================
+# =============================================================================
+# RUNNING
+# =============================================================================
 
 # Run the CLI with optional arguments
 run args='':
@@ -179,10 +169,6 @@ github-ci-check: lint-rust build test
 # =============================================================================
 # DOCUMENTATION
 # =============================================================================
-
-# ==============================================================================
-# Documentation
-# ==============================================================================
 
 # Generate rustdoc documentation
 doc:
@@ -211,8 +197,9 @@ dev-setup:
     mise install
     cargo build
 
-# Full development check (format, lint, test, build)
-dev-check: lint test build
+# Generate changelog from git history
+changelog:
+    @{{ mise_exec }} git cliff -o CHANGELOG.md
 
 # ==============================================================================
 # Dependencies

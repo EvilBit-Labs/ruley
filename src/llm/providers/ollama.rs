@@ -284,12 +284,19 @@ impl LLMProvider for OllamaProvider {
             .into_iter()
             .next()
             .and_then(|choice| choice.message.content)
-            .unwrap_or_default();
+            .filter(|c| !c.is_empty())
+            .ok_or_else(|| RuleyError::Provider {
+                provider: "ollama".to_string(),
+                message: "LLM returned empty response content".to_string(),
+            })?;
 
-        let (prompt_tokens, completion_tokens) = response_body
-            .usage
-            .map(|u| (u.prompt_tokens, u.completion_tokens))
-            .unwrap_or((0, 0));
+        let (prompt_tokens, completion_tokens) = match response_body.usage {
+            Some(u) => (u.prompt_tokens, u.completion_tokens),
+            None => {
+                tracing::warn!("Ollama response missing usage data; token counts will be zero");
+                (0, 0)
+            }
+        };
 
         Ok(CompletionResponse::new(
             content,

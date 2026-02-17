@@ -226,7 +226,7 @@ fn detect_existing_rules(
             let format = match *filename {
                 "CLAUDE.md" => "claude",
                 ".windsurfrules" => "windsurf",
-                "CONVENTIONS.md" => "aider",
+                "CONVENTIONS.md" | ".aider.conf.yml" => "aider",
                 "AI_RULES.md" => "generic",
                 ".cursorrules" => "cursor",
                 _ => continue,
@@ -237,8 +237,16 @@ fn detect_existing_rules(
                 .iter()
                 .any(|f| f.to_lowercase() == format)
             {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    existing.insert(filename.to_string(), content);
+                match std::fs::read_to_string(&path) {
+                    Ok(content) => {
+                        existing.insert(filename.to_string(), content);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to read existing rule file '{}': {e}",
+                            path.display()
+                        );
+                    }
                 }
             }
         }
@@ -251,8 +259,13 @@ fn detect_existing_rules(
             .iter()
             .any(|f| f.to_lowercase() == "copilot")
     {
-        if let Ok(content) = std::fs::read_to_string(&copilot_path) {
-            existing.insert(".github/copilot-instructions.md".to_string(), content);
+        match std::fs::read_to_string(&copilot_path) {
+            Ok(content) => {
+                existing.insert(".github/copilot-instructions.md".to_string(), content);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to read existing copilot instructions: {e}");
+            }
         }
     }
 
@@ -267,13 +280,21 @@ fn detect_existing_rules(
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().is_some_and(|ext| ext == "mdc") {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        let relative = path
-                            .strip_prefix(project_path)
-                            .unwrap_or(&path)
-                            .to_string_lossy()
-                            .to_string();
-                        existing.insert(relative, content);
+                    match std::fs::read_to_string(&path) {
+                        Ok(content) => {
+                            let relative = path
+                                .strip_prefix(project_path)
+                                .unwrap_or(&path)
+                                .to_string_lossy()
+                                .to_string();
+                            existing.insert(relative, content);
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to read cursor rule file '{}': {e}",
+                                path.display()
+                            );
+                        }
                     }
                 }
             }

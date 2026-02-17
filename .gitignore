@@ -135,5 +135,9 @@ megalinter-reports/
 
 # megalinter crud
 undefined/
+# Test artifacts
+/tests/fixtures/**/node_modules/
+/tests/fixtures/**/target/
+/tests/fixtures/**/dist/
+
 .claude.local.md
-.vscode/settings.json

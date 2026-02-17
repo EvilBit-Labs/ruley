@@ -198,6 +198,58 @@ pub fn create_config_file(dir: &TempDir, content: &str) -> PathBuf {
     config_path
 }
 
+/// Parses dry-run output into key-value pairs.
+///
+/// Extracts lines matching `Key: Value` or `Key:  Value` patterns from stdout.
+/// Strips tree-drawing Unicode prefixes (├─, └─, │) before parsing.
+/// Used by dry-run tests to verify configuration is displayed correctly.
+pub fn parse_dry_run_output(stdout: &str) -> std::collections::HashMap<String, String> {
+    let mut result = std::collections::HashMap::new();
+
+    for line in stdout.lines() {
+        // Strip ANSI escape codes, then trim whitespace and tree-drawing chars
+        let stripped = strip_ansi_codes(line);
+        let trimmed = stripped
+            .trim()
+            .trim_start_matches(|c: char| !c.is_ascii_alphabetic());
+
+        // Match lines like "Key:     Value" or "Key: Value"
+        if let Some(colon_pos) = trimmed.find(':') {
+            let key = trimmed[..colon_pos].trim();
+            let value = trimmed[colon_pos + 1..].trim();
+
+            // Only capture non-empty keys that start with an alphabetic character
+            if !key.is_empty()
+                && !value.is_empty()
+                && key.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+            {
+                result.insert(key.to_string(), value.to_string());
+            }
+        }
+    }
+
+    result
+}
+
+/// Strip ANSI escape codes from a string.
+fn strip_ansi_codes(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip until we find a letter that ends the escape sequence
+            for c2 in chars.by_ref() {
+                if c2.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 /// Runs the CLI with specified arguments and captures output.
 ///
 /// Uses a controlled set of environment variables to avoid test pollution.

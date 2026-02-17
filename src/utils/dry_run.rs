@@ -190,6 +190,28 @@ pub fn display_dry_run_summary(
         style(format!("${:.2}", estimated_cost)).green()
     )?;
 
+    // Configuration section
+    writeln!(term)?;
+    writeln!(term, "{}:", style("Configuration").bold())?;
+    writeln!(
+        term,
+        "{} Compress: {}",
+        style("\u{251c}\u{2500}").dim(),
+        config.compress
+    )?;
+    writeln!(
+        term,
+        "{} Chunk Size: {}",
+        style("\u{251c}\u{2500}").dim(),
+        config.chunk_size
+    )?;
+    writeln!(
+        term,
+        "{} On Conflict: {}",
+        style("\u{2514}\u{2500}").dim(),
+        config.on_conflict
+    )?;
+
     // Output formats
     writeln!(term)?;
     writeln!(
@@ -325,7 +347,7 @@ mod tests {
             repomix_file: None,
             path: PathBuf::from("."),
             description: None,
-            rule_type: "comprehensive".to_string(),
+            rule_type: crate::generator::rules::RuleType::Auto,
             include: vec![],
             exclude: vec![],
             compress: true,
@@ -337,6 +359,9 @@ mod tests {
             output_paths: std::collections::HashMap::new(),
             chunking: None,
             providers: ProvidersConfig::default(),
+            validation: crate::cli::config::ValidationConfig::default(),
+            finalization: crate::cli::config::FinalizationConfig::default(),
+            on_conflict: "prompt".to_string(),
         }
     }
 

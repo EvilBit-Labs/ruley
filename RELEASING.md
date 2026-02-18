@@ -60,7 +60,7 @@ Before creating a release, verify the following:
    GitHub Actions will automatically:
 
    - Validate the tag version matches `Cargo.toml`
-   - Build binaries for all 6 platform targets
+   - Build binaries for all 5 platform targets
    - Generate SHA256 checksums
    - Create a GitHub release with changelog and binaries
    - Publish to crates.io (non-prereleases only)
@@ -70,7 +70,7 @@ Before creating a release, verify the following:
 After the workflow completes:
 
 1. **GitHub Actions**: Monitor the workflow run at `.github/workflows/release.yml`
-2. **Binaries**: Verify all 6 platform binaries are attached to the GitHub release
+2. **Binaries**: Verify all 5 platform binaries are attached to the GitHub release
 3. **Checksums**: Confirm SHA256 checksums are present
 4. **crates.io**: Verify the package is published at `https://crates.io/crates/ruley`
 5. **Install test**: Run `cargo install ruley` to verify end-to-end
@@ -82,7 +82,6 @@ After the workflow completes:
 | Linux x86_64          | `x86_64-unknown-linux-gnu`  | `.tar.gz` |
 | Linux x86_64 (static) | `x86_64-unknown-linux-musl` | `.tar.gz` |
 | Linux ARM64           | `aarch64-unknown-linux-gnu` | `.tar.gz` |
-| macOS x86_64          | `x86_64-apple-darwin`       | `.tar.gz` |
 | macOS ARM64           | `aarch64-apple-darwin`      | `.tar.gz` |
 | Windows x86_64        | `x86_64-pc-windows-msvc`    | `.zip`    |
 

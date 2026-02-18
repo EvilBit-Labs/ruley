@@ -11,7 +11,7 @@ Tame your unruly codebase. Make it _ruley_.
 - **Single binary distribution** - No runtime dependencies (Node.js, Python, etc.)
 - **Multi-provider LLM support** - Choose your preferred AI backend
 - **Native performance** - Fast codebase analysis using Rust
-- **Smart compression** - Tree-sitter based code compression for token efficiency
+- **Smart compression** - Tree-sitter-based code compression for token efficiency
 - **Accurate token counting** - Native tiktoken implementation
 
 ## Quick Start

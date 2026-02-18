@@ -482,6 +482,7 @@ fn extract_typescript_nodes(
                             result.push_str(&source[node.start_byte()..child.start_byte()]);
                             extract_typescript_nodes(source, child, &mut node_cursor, result);
                             handled = true;
+                            break;
                         }
                         _ => {}
                     }

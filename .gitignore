@@ -82,7 +82,6 @@ dist/
 
 ### VisualStudioCode Patch ###
 # Ignore all local history of files
-.history
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/rust,macos,visualstudiocode,rider
@@ -119,8 +118,6 @@ docs/book/
 .env.*
 !.env.example
 !.env.sample
-.env.local
-.env.*.local
 .envrc
 .direnv/
 

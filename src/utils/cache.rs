@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Cache management module for .ruley/ directory lifecycle and temp files.
 //!
 //! This module manages temporary files created during the rule generation pipeline:

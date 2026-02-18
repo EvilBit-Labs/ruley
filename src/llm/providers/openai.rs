@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::llm::provider::{CompletionOptions, CompletionResponse, LLMProvider, Message, Pricing};
 use crate::utils::error::RuleyError;
 use async_trait::async_trait;
@@ -187,10 +190,11 @@ impl LLMProvider for OpenAIProvider {
             .and_then(|choice| choice.message.content)
             .unwrap_or_default();
 
-        Ok(CompletionResponse {
+        Ok(CompletionResponse::new(
             content,
-            tokens_used: response_body.usage.prompt_tokens + response_body.usage.completion_tokens,
-        })
+            response_body.usage.prompt_tokens,
+            response_body.usage.completion_tokens,
+        ))
     }
 
     fn model(&self) -> &str {
@@ -199,8 +203,8 @@ impl LLMProvider for OpenAIProvider {
 
     fn pricing(&self) -> Pricing {
         Pricing {
-            input_per_1k: 2.5,
-            output_per_1k: 10.0,
+            input_per_1k: 0.0025, // $0.0025 per 1K input tokens
+            output_per_1k: 0.010, // $0.010 per 1K output tokens
         }
     }
 }

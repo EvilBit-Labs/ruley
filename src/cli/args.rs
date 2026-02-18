@@ -1,5 +1,15 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::generator::rules::RuleType;
 use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, ValueEnum};
 use std::path::PathBuf;
+
+/// Supported LLM provider names for CLI validation.
+const SUPPORTED_PROVIDERS: [&str; 4] = ["anthropic", "openai", "ollama", "openrouter"];
+
+/// Supported conflict resolution strategies for CLI validation.
+const SUPPORTED_CONFLICT_STRATEGIES: [&str; 4] = ["prompt", "overwrite", "skip", "smart-merge"];
 
 /// Supported output formats for generated rules.
 /// Each format corresponds to a specific AI IDE tool or configuration style.
@@ -38,6 +48,14 @@ pub struct ArgsPresence {
     pub chunk_size: bool,
     /// Whether --no-confirm was explicitly provided
     pub no_confirm: bool,
+    /// Whether --retry-on-validation-failure was explicitly provided
+    pub retry_on_validation_failure: bool,
+    /// Whether --no-deconflict was explicitly provided
+    pub no_deconflict: bool,
+    /// Whether --no-semantic-validation was explicitly provided
+    pub no_semantic_validation: bool,
+    /// Whether --on-conflict was explicitly provided
+    pub on_conflict: bool,
 }
 
 impl ArgsPresence {
@@ -50,6 +68,10 @@ impl ArgsPresence {
             compress: is_from_cli(matches, "compress"),
             chunk_size: is_from_cli(matches, "chunk_size"),
             no_confirm: is_from_cli(matches, "no_confirm"),
+            retry_on_validation_failure: is_from_cli(matches, "retry_on_validation_failure"),
+            no_deconflict: is_from_cli(matches, "no_deconflict"),
+            no_semantic_validation: is_from_cli(matches, "no_semantic_validation"),
+            on_conflict: is_from_cli(matches, "on_conflict"),
         }
     }
 }
@@ -72,8 +94,14 @@ pub struct Args {
     #[arg(default_value = ".")]
     pub path: PathBuf,
 
-    /// LLM provider
-    #[arg(short, long, default_value = "anthropic", env = "RULEY_PROVIDER")]
+    /// LLM provider (anthropic, openai, ollama, openrouter)
+    #[arg(
+        short,
+        long,
+        default_value = "anthropic",
+        env = "RULEY_PROVIDER",
+        value_parser = clap::builder::PossibleValuesParser::new(SUPPORTED_PROVIDERS)
+    )]
     pub provider: String,
 
     /// Model to use
@@ -103,8 +131,8 @@ pub struct Args {
     pub description: Option<String>,
 
     /// Cursor rule type
-    #[arg(long, default_value = "agent", env = "RULEY_RULE_TYPE")]
-    pub rule_type: String,
+    #[arg(long, default_value = "auto", env = "RULEY_RULE_TYPE")]
+    pub rule_type: RuleType,
 
     /// Config file path
     #[arg(short, long, default_value = "ruley.toml", env = "RULEY_CONFIG")]
@@ -133,6 +161,26 @@ pub struct Args {
     /// Show what would be processed without calling LLM
     #[arg(long, env = "RULEY_DRY_RUN")]
     pub dry_run: bool,
+
+    /// Automatically retry with LLM fix when validation fails
+    #[arg(long)]
+    pub retry_on_validation_failure: bool,
+
+    /// Disable LLM-based deconfliction with existing rule files
+    #[arg(long)]
+    pub no_deconflict: bool,
+
+    /// Disable all semantic validation checks
+    #[arg(long)]
+    pub no_semantic_validation: bool,
+
+    /// Conflict resolution strategy when output files exist (prompt, overwrite, skip, smart-merge)
+    #[arg(
+        long,
+        env = "RULEY_ON_CONFLICT",
+        value_parser = clap::builder::PossibleValuesParser::new(SUPPORTED_CONFLICT_STRATEGIES)
+    )]
+    pub on_conflict: Option<String>,
 
     /// Increase verbosity (-v, -vv, -vvv)
     #[arg(short, action = clap::ArgAction::Count)]

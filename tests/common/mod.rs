@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Common test utilities and fixtures for integration tests.
 
 use std::path::PathBuf;
@@ -198,10 +201,62 @@ pub fn create_config_file(dir: &TempDir, content: &str) -> PathBuf {
     config_path
 }
 
+/// Parses dry-run output into key-value pairs.
+///
+/// Extracts lines matching `Key: Value` or `Key:  Value` patterns from stdout.
+/// Strips tree-drawing Unicode prefixes (├─, └─, │) before parsing.
+/// Used by dry-run tests to verify configuration is displayed correctly.
+pub fn parse_dry_run_output(stdout: &str) -> std::collections::HashMap<String, String> {
+    let mut result = std::collections::HashMap::new();
+
+    for line in stdout.lines() {
+        // Strip ANSI escape codes, then trim whitespace and tree-drawing chars
+        let stripped = strip_ansi_codes(line);
+        let trimmed = stripped
+            .trim()
+            .trim_start_matches(|c: char| !c.is_ascii_alphabetic());
+
+        // Match lines like "Key:     Value" or "Key: Value"
+        if let Some(colon_pos) = trimmed.find(':') {
+            let key = trimmed[..colon_pos].trim();
+            let value = trimmed[colon_pos + 1..].trim();
+
+            // Only capture non-empty keys that start with an alphabetic character
+            if !key.is_empty()
+                && !value.is_empty()
+                && key.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+            {
+                result.insert(key.to_string(), value.to_string());
+            }
+        }
+    }
+
+    result
+}
+
+/// Strip ANSI escape codes from a string.
+fn strip_ansi_codes(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip until we find a letter that ends the escape sequence
+            for c2 in chars.by_ref() {
+                if c2.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 /// Runs the CLI with specified arguments and captures output.
 ///
-/// Uses a controlled set of environment variables to avoid test pollution.
-/// Only passes essential variables (PATH, HOME) and RULEY_* variables.
+/// Strips RULEY_* and provider API key env vars to prevent test pollution
+/// (e.g. real API calls from developer env). Inherits all other env vars.
 pub fn run_cli_with_config(dir: &PathBuf, args: &[&str]) -> std::process::Output {
     let manifest_dir =
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR should be set in tests");
@@ -211,16 +266,17 @@ pub fn run_cli_with_config(dir: &PathBuf, args: &[&str]) -> std::process::Output
     cmd.args(args);
     cmd.current_dir(&manifest_dir);
 
-    // Use a controlled environment to avoid test pollution.
-    // Only pass essential system variables and RULEY_* variables.
-    cmd.env_clear();
-    for (key, value) in std::env::vars() {
-        if key == "PATH"
-            || key == "HOME"
-            || key == "CARGO_MANIFEST_DIR"
-            || key.starts_with("RULEY_")
+    // Strip env vars that could cause test pollution (e.g. real API calls).
+    // Prefer denylist over env_clear() to avoid breaking tooling that injects
+    // env vars (LLVM_PROFILE_FILE for coverage, RUSTFLAGS, etc.).
+    for (key, _) in std::env::vars() {
+        if key.starts_with("RULEY_")
+            || key == "ANTHROPIC_API_KEY"
+            || key == "OPENAI_API_KEY"
+            || key == "OPENROUTER_API_KEY"
+            || key == "OLLAMA_HOST"
         {
-            cmd.env(&key, &value);
+            cmd.env_remove(&key);
         }
     }
 

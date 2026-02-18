@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{MergedConfig, utils::error::RuleyError};
 use regex::Regex;
 use std::sync::LazyLock;
@@ -460,9 +463,38 @@ fn extract_typescript_nodes(
                 result.push('\n');
             }
         }
-        "import_statement" | "export_statement" => {
+        "import_statement" => {
             result.push_str(&source[node.start_byte()..node.end_byte()]);
             result.push('\n');
+        }
+        "export_statement" => {
+            // For exports containing class/function declarations, recurse to
+            // compress the inner declaration (drop method bodies, etc.).
+            // For simple exports (constants, re-exports), preserve as-is.
+            let child_count: u32 = node.child_count().try_into().unwrap_or(0);
+            let mut handled = false;
+            let mut node_cursor = node.walk();
+            for i in 0..child_count {
+                if let Some(child) = node.child(i) {
+                    match child.kind() {
+                        "class_declaration"
+                        | "function_declaration"
+                        | "generator_function_declaration"
+                        | "abstract_class_declaration" => {
+                            // Preserve "export " (or "export default ") prefix
+                            result.push_str(&source[node.start_byte()..child.start_byte()]);
+                            extract_typescript_nodes(source, child, &mut node_cursor, result);
+                            handled = true;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if !handled {
+                result.push_str(&source[node.start_byte()..node.end_byte()]);
+                result.push('\n');
+            }
         }
         "comment" => {
             result.push_str(&source[node.start_byte()..node.end_byte()]);
@@ -807,7 +839,13 @@ pub async fn compress_codebase(
                     None => {
                         match whitespace_compressor.compress(&original_content, Language::Unknown) {
                             Ok(compressed) => (compressed, super::CompressionMethod::Whitespace),
-                            Err(_) => (original_content.clone(), super::CompressionMethod::None),
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Whitespace compression failed for {}: {e}",
+                                    entry.path.display()
+                                );
+                                (original_content.clone(), super::CompressionMethod::None)
+                            }
                         }
                     }
                 };

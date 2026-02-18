@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Success summary display for completed pipeline runs.
 //!
 //! This module provides functions for displaying a comprehensive summary
@@ -209,6 +212,8 @@ mod tests {
             backup_created: false,
             backup_path: None,
             is_new: true,
+            skipped: false,
+            smart_merged: false,
         }
     }
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! JSON output formatter.
 //!
 //! Generates structured JSON output of the generated rules.

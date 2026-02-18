@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::utils::error::RuleyError;
 use git2::Repository;
 use std::path::{Path, PathBuf};

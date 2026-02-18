@@ -1,66 +1,19 @@
-# Dependabot configuration for ruley
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
 version: 2
 updates:
-    # Rust dependencies
     - package-ecosystem: "cargo"
       directory: "/"
       schedule:
           interval: "weekly"
-          day: "monday"
-          time: "09:00"
-          timezone: "America/New_York"
-      open-pull-requests-limit: 10
-      commit-message:
-          prefix: "deps(rust)"
-      labels:
-          - "dependencies"
-          - "rust"
-      groups:
-          # Group minor/patch updates to reduce PR noise
-          rust-minor:
-              patterns:
-                  - "*"
-              update-types:
-                  - "minor"
-                  - "patch"
+      rebase-strategy: "disabled"
 
-    # GitHub Actions
     - package-ecosystem: "github-actions"
       directory: "/"
       schedule:
           interval: "weekly"
-          day: "monday"
-      open-pull-requests-limit: 5
-      commit-message:
-          prefix: "ci(actions)"
-      labels:
-          - "dependencies"
-          - "ci"
-      groups:
-          actions-all:
-              patterns:
-                  - "*"
+      rebase-strategy: "disabled"
 
-    # Dev containers
     - package-ecosystem: "devcontainers"
       directory: "/"
       schedule:
-          interval: "monthly"
-      commit-message:
-          prefix: "chore(devcontainer)"
-      labels:
-          - "dependencies"
-          - "devcontainer"
-
-    # Docker (if Dockerfile exists)
-    - package-ecosystem: "docker"
-      directory: "/"
-      schedule:
           interval: "weekly"
-      commit-message:
-          prefix: "deps(docker)"
-      labels:
-          - "dependencies"
-          - "docker"
+      rebase-strategy: "disabled"

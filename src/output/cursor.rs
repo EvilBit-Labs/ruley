@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Cursor IDE output formatter.
 //!
 //! Generates .mdc (Markdown Configuration) files for Cursor IDE's rules system.

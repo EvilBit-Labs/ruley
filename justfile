@@ -40,11 +40,11 @@ check: pre-commit lint build-check
 
 # Run clippy with zero warnings policy
 clippy:
-    cargo clippy --all-targets --all-features -- -D warnings
+    @{{ mise_exec }} cargo clippy --all-targets --all-features -- -D warnings
 
 # Run clippy with no default features
 clippy-min:
-    cargo clippy --all-targets --no-default-features -- -D warnings
+    @{{ mise_exec }} cargo clippy --all-targets --no-default-features -- -D warnings
 
 # Run full lint suite (format check + clippy with all features)
 lint-rust: fmt-check clippy
@@ -54,11 +54,11 @@ lint: lint-rust
 
 # Run pre-commit hooks
 pre-commit:
-    pre-commit run --all-files
+    @{{ mise_exec }} pre-commit run --all-files
 
 # Run clippy with fixes
 fix:
-    cargo clippy --fix --allow-dirty --allow-staged
+    @{{ mise_exec }} cargo clippy --fix --allow-dirty --allow-staged
 
 # ==============================================================================
 # Building
@@ -72,19 +72,19 @@ build:
     @{{ mise_exec }} cargo build
 
 build-release:
-    cargo build --release --all-features
+    @{{ mise_exec }} cargo build --release --all-features
 
 # Run all tests using nextest
 test:
-    cargo nextest run --all-features
+    @{{ mise_exec }} cargo nextest run --all-features
 
 # Run tests with standard cargo test (fallback)
 test-cargo:
-    cargo test --all-features
+    @{{ mise_exec }} cargo test --all-features
 
 # Run tests with output
 test-verbose:
-    cargo nextest run --all-features --no-capture
+    @{{ mise_exec }} cargo nextest run --all-features --no-capture
 
 # Run benchmarks
 bench:
@@ -100,17 +100,17 @@ bench-name name:
 
 # Generate coverage report
 coverage:
-    cargo llvm-cov --all-features --no-report
-    cargo llvm-cov report --lcov --output-path lcov.info
+    @{{ mise_exec }} cargo llvm-cov --all-features --no-report
+    @{{ mise_exec }} cargo llvm-cov report --lcov --output-path lcov.info
 
 # Generate HTML coverage report for local viewing
 [unix]
 coverage-report:
-    cargo llvm-cov --all-features --html --open
+    @{{ mise_exec }} cargo llvm-cov --all-features --html --open
 
 # Show coverage summary
 coverage-summary:
-    cargo llvm-cov --all-features
+    @{{ mise_exec }} cargo llvm-cov --all-features
 
 # ==============================================================================
 # Security & Auditing
@@ -118,15 +118,15 @@ coverage-summary:
 
 # Run dependency audit
 audit:
-    cargo audit
+    @{{ mise_exec }} cargo audit
 
 # Run cargo deny checks
 deny:
-    cargo deny check
+    @{{ mise_exec }} cargo deny check
 
 # Check for outdated dependencies
 outdated:
-    cargo outdated --depth=1
+    @{{ mise_exec }} cargo outdated --depth=1
 
 # ==============================================================================
 # Distribution
@@ -134,15 +134,15 @@ outdated:
 
 # Run dist plan (dry run)
 dist-plan:
-    cargo dist plan
+    @{{ mise_exec }} cargo dist plan
 
 # Run dist check
 dist-check:
-    cargo dist check
+    @{{ mise_exec }} cargo dist check
 
 # Build dist artifacts
 dist:
-    cargo dist build
+    @{{ mise_exec }} cargo dist build
 
 # =============================================================================
 # RUNNING
@@ -181,12 +181,12 @@ doc-build:
 # Build mdBook documentation
 [unix]
 docs-build:
-    cd docs && mdbook build
+    cd docs && {{ mise_exec }} mdbook build
 
 # Serve documentation locally with live reload
 [unix]
 docs-serve:
-    cd docs && mdbook serve --open
+    cd docs && {{ mise_exec }} mdbook serve --open
 
 # ==============================================================================
 # Development
@@ -195,7 +195,7 @@ docs-serve:
 # Setup development environment
 dev-setup:
     mise install
-    cargo build
+    @{{ mise_exec }} cargo build
 
 # Generate changelog from git history
 changelog:

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::utils::error::RuleyError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Chunk analysis and merge logic for processing large codebases.
 //!
 //! This module provides functionality to process large codebases that have been

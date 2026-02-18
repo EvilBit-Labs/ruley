@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Integration tests for LLM provider implementations.
 //!
 //! Uses mockito HTTP mocking to test Ollama and OpenRouter providers

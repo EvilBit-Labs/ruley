@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Windsurf IDE output formatter.
 //!
 //! Generates .windsurfrules files for Windsurf IDE's AI assistant.

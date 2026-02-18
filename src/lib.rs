@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! # ruley Pipeline Infrastructure
 //!
 //! ruley implements a comprehensive 10-stage pipeline architecture for generating

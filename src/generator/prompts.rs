@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Prompt generation for LLM analysis and format refinement.
 //!
 //! This module provides functions to build prompts for:

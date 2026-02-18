@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Cost calculation and tracking for LLM operations.
 //!
 //! This module provides structures for calculating LLM costs based on provider pricing

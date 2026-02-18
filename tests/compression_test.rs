@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Unit tests for compression logic.
 //!
 //! Tests tree-sitter and whitespace compression with representative code samples.

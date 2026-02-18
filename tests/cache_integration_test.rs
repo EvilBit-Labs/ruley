@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Integration tests for the caching and state management system.
 //!
 //! These tests verify the full lifecycle of the cache manager and state persistence,

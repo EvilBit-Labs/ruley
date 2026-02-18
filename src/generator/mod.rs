@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Rule generation module for AI IDE rules.
 //!
 //! This module provides:

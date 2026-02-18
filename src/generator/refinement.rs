@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Iterative refinement module for auto-fixing validation errors.
 //!
 //! When validation fails and `retry_on_failure` is enabled, this module

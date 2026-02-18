@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Cost estimation display and user confirmation prompts.
 //!
 //! This module provides functions for displaying detailed cost breakdowns

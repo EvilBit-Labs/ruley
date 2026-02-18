@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Validation module for generated rule outputs.
 //!
 //! Provides three-layer validation (syntax, schema, semantic) for each output format.

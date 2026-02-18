@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Dry-run mode display for previewing pipeline operations.
 //!
 //! This module provides functions for displaying what would happen during

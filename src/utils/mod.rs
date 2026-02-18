@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 pub mod cache;
 pub mod cost_display;
 pub mod dry_run;

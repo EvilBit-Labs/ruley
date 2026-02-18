@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Tests for the iterative refinement module.
 //!
 //! Tests auto-fix/retry logic including temperature scaling,

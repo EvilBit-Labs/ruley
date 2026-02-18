@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Configuration management using the `config` crate for hierarchical discovery and merging.
 //!
 //! ## Configuration Sources (in precedence order, highest to lowest):

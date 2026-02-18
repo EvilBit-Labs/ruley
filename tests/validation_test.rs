@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Integration tests for the three-layer validation system.
 //!
 //! Tests syntax, schema, and semantic validation across all output formats.

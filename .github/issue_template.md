@@ -102,7 +102,7 @@
 - [ ] I have provided all requested information
 - [ ] I have included relevant error messages or logs
 - [ ] I have tested with the latest version of ruley
-- [ ] I have followed the [Contributing Guide](CONTRIBUTING.md)
+- [ ] I have followed the [Contributing Guide](https://github.com/EvilBit-Labs/ruley/blob/main/CONTRIBUTING.md)
 
 ## Labels
 

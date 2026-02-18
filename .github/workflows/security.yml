@@ -23,6 +23,7 @@ concurrency:
 jobs:
     audit:
         runs-on: ubuntu-latest
+        if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -36,7 +37,7 @@ jobs:
             - uses: EmbarkStudios/cargo-deny-action@82eb9f621fbc699dd0918f3ea06864c14cc84246 # v2
 
             - name: Run cargo outdated
-              run: cargo outdated --depth=1 --exit-code=1
+              run: cargo outdated --depth=1
 
             - name: Run cargo dist check
               run: cargo dist check

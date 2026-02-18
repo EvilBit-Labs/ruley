@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Claude Code output formatter.
 //!
 //! Generates CLAUDE.md files for Claude Code's project instructions.

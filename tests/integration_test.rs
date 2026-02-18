@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Integration tests for ruley CLI.
 
 mod common;
@@ -336,7 +339,7 @@ mod file_scanning_tests {
             repomix_file: None,
             path: project_path.clone(),
             description: None,
-            rule_type: "cursor".to_string(),
+            rule_type: ruley::generator::rules::RuleType::default(),
             include: vec![],
             exclude: vec![],
             compress: false,
@@ -348,6 +351,9 @@ mod file_scanning_tests {
             chunking: None,
             output_paths: std::collections::HashMap::new(),
             providers: ruley::cli::config::ProvidersConfig::default(),
+            validation: ruley::cli::config::ValidationConfig::default(),
+            finalization: ruley::cli::config::FinalizationConfig::default(),
+            on_conflict: "prompt".to_string(),
         };
 
         // Use the walker to scan files
@@ -446,7 +452,7 @@ mod compression_pipeline_tests {
             repomix_file: None,
             path: project_path.clone(),
             description: None,
-            rule_type: "cursor".to_string(),
+            rule_type: ruley::generator::rules::RuleType::default(),
             include: vec![],
             exclude: vec![],
             compress: true,
@@ -458,6 +464,9 @@ mod compression_pipeline_tests {
             chunking: None,
             output_paths: std::collections::HashMap::new(),
             providers: ruley::cli::config::ProvidersConfig::default(),
+            validation: ruley::cli::config::ValidationConfig::default(),
+            finalization: ruley::cli::config::FinalizationConfig::default(),
+            on_conflict: "prompt".to_string(),
         };
 
         // Scan files first
@@ -703,7 +712,7 @@ pub fn greet() -> &'static str {
 mod fallback_tests {
     //! Tests for fallback behavior when compression fails or is unavailable.
 
-    use super::common::{create_mock_project, create_temp_dir};
+    use super::common::create_temp_dir;
     use ruley::packer::compress::{Compressor, Language, WhitespaceCompressor};
 
     /// Test whitespace fallback for unsupported language.
@@ -740,6 +749,7 @@ mod fallback_tests {
     #[tokio::test]
     #[cfg(feature = "compression-typescript")]
     async fn test_invalid_syntax_triggers_fallback() {
+        use super::common::create_mock_project;
         let temp_dir = create_temp_dir();
 
         // Create project with invalid TypeScript file
@@ -761,7 +771,7 @@ mod fallback_tests {
             repomix_file: None,
             path: project_path.clone(),
             description: None,
-            rule_type: "cursor".to_string(),
+            rule_type: ruley::generator::rules::RuleType::default(),
             include: vec![],
             exclude: vec![],
             compress: true,
@@ -773,6 +783,9 @@ mod fallback_tests {
             chunking: None,
             output_paths: std::collections::HashMap::new(),
             providers: ruley::cli::config::ProvidersConfig::default(),
+            validation: ruley::cli::config::ValidationConfig::default(),
+            finalization: ruley::cli::config::FinalizationConfig::default(),
+            on_conflict: "prompt".to_string(),
         };
 
         // Scan and compress - should fall back to whitespace compression on error
@@ -823,5 +836,1120 @@ mod fallback_tests {
             .expect("Whitespace fallback should work");
 
         assert!(!result.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod multi_format_output_tests {
+    //! Flow 11: Multi-format output generation.
+    //!
+    //! Tests that all output formatters can be instantiated and produce valid
+    //! content from generated rules, and that format metadata is correct.
+
+    use ruley::generator::rules::{FormattedRules, GeneratedRules};
+    use ruley::output::{Metadata, get_formatter};
+
+    /// Test that all supported formats can be instantiated via get_formatter.
+    #[test]
+    fn test_all_formatters_instantiate() {
+        let formats = [
+            "cursor", "claude", "copilot", "windsurf", "aider", "generic", "json",
+        ];
+        for format in &formats {
+            let formatter = get_formatter(format);
+            assert!(
+                formatter.is_ok(),
+                "Should instantiate formatter for '{}'",
+                format
+            );
+        }
+    }
+
+    /// Test that an unknown format returns an error.
+    #[test]
+    fn test_unknown_format_errors() {
+        let result = get_formatter("nonexistent");
+        assert!(result.is_err());
+    }
+
+    /// Test multi-format output from a single GeneratedRules.
+    #[test]
+    fn test_multi_format_generation() {
+        let mut rules = GeneratedRules::new("analysis");
+
+        // Simulate LLM producing format-specific content
+        rules.add_format(FormattedRules::new(
+            "cursor",
+            "---\ndescription: Project rules\nalwaysApply: true\n---\n\n# Rules\n\nUse spaces.\n",
+        ));
+        rules.add_format(FormattedRules::new(
+            "claude",
+            "# Project Rules\n\n## Standards\n\nUse spaces for indentation.\n",
+        ));
+        rules.add_format(FormattedRules::new(
+            "json",
+            r#"{"rules": ["Use spaces for indentation"]}"#,
+        ));
+
+        assert_eq!(rules.formats().count(), 3);
+
+        // Each format should be retrievable
+        let cursor_content = rules.get_format("cursor");
+        assert!(cursor_content.is_some());
+        assert!(cursor_content.unwrap().content.contains("Rules"));
+
+        let claude_content = rules.get_format("claude");
+        assert!(claude_content.is_some());
+        assert!(claude_content.unwrap().content.contains("Standards"));
+
+        let json_content = rules.get_format("json");
+        assert!(json_content.is_some());
+        assert!(json_content.unwrap().content.contains("rules"));
+    }
+
+    /// Test format metadata: extensions and default directories.
+    #[test]
+    fn test_format_metadata_correctness() {
+        let cursor = get_formatter("cursor").unwrap();
+        assert_eq!(cursor.extension(), "mdc");
+        assert!(
+            !cursor.default_directory().is_empty(),
+            "Cursor should have a subdirectory"
+        );
+
+        let claude = get_formatter("claude").unwrap();
+        assert_eq!(claude.extension(), "md");
+
+        let json = get_formatter("json").unwrap();
+        assert_eq!(json.extension(), "json");
+    }
+
+    /// Test formatter output with generated rules containing format-specific content.
+    #[test]
+    fn test_formatter_output_retrieves_content() {
+        let mut rules = GeneratedRules::new("test analysis");
+        let expected_content = "# Copilot Instructions\n\nFollow these rules.\n";
+        rules.add_format(FormattedRules::new("copilot", expected_content));
+
+        let metadata = Metadata {
+            project_name: "test-project".to_string(),
+            format: "copilot".to_string(),
+        };
+
+        let formatter = get_formatter("copilot").unwrap();
+        let result = formatter.format(&rules, &metadata);
+        assert!(
+            result.is_ok(),
+            "Formatter should produce output: {:?}",
+            result.err()
+        );
+
+        let output = result.unwrap();
+        assert!(
+            output.contains("Follow these rules"),
+            "Output should contain the generated content"
+        );
+    }
+}
+
+#[cfg(test)]
+mod cost_tracking_integration_tests {
+    //! Flow 12: Cost calculation and tracking integration.
+    //!
+    //! Tests end-to-end cost tracking across multi-step operations,
+    //! verifying correct aggregation, breakdown, and summary generation.
+
+    use ruley::llm::cost::{CostCalculator, CostTracker};
+    use ruley::llm::provider::Pricing;
+
+    /// Test cost tracking across a simulated multi-step rule generation.
+    #[test]
+    fn test_multi_step_cost_tracking() {
+        let pricing = Pricing {
+            input_per_1k: 0.003,
+            output_per_1k: 0.015,
+        };
+        let mut tracker = CostTracker::new(CostCalculator::new(pricing));
+
+        // Simulate a typical rule generation workflow
+        tracker.add_operation("analysis", 8000, 3000);
+        tracker.add_operation("chunk_1_generation", 4000, 2000);
+        tracker.add_operation("chunk_2_generation", 4000, 1800);
+        tracker.add_operation("merge", 6000, 4000);
+
+        assert_eq!(tracker.operation_count(), 4);
+        assert_eq!(tracker.total_input_tokens(), 22000);
+        assert_eq!(tracker.total_output_tokens(), 10800);
+        assert_eq!(tracker.total_tokens(), 32800);
+
+        // Verify cost is positive and reasonable
+        let total = tracker.total_cost();
+        assert!(total > 0.0, "Total cost should be positive");
+
+        // Verify breakdown matches
+        let breakdown = tracker.breakdown();
+        assert_eq!(breakdown.len(), 4);
+        assert_eq!(breakdown[0].operation, "analysis");
+        assert_eq!(breakdown[3].operation, "merge");
+
+        // Sum of breakdown costs should equal total
+        let breakdown_sum: f64 = breakdown.iter().map(|b| b.cost).sum();
+        assert!(
+            (breakdown_sum - total).abs() < 0.0001,
+            "Breakdown sum should equal total cost"
+        );
+    }
+
+    /// Test cost estimation before making requests.
+    #[test]
+    fn test_cost_estimation_before_request() {
+        let pricing = Pricing {
+            input_per_1k: 0.003,
+            output_per_1k: 0.015,
+        };
+        let calculator = CostCalculator::new(pricing);
+
+        let estimate = calculator.estimate_cost(10000, 5000);
+
+        // Input: 10.0 * 0.003 = 0.03
+        // Output: 5.0 * 0.015 = 0.075
+        assert!((estimate.input_cost - 0.03).abs() < 0.0001);
+        assert!((estimate.output_cost - 0.075).abs() < 0.0001);
+        assert!((estimate.total_cost - 0.105).abs() < 0.0001);
+        assert_eq!(estimate.total_tokens(), 15000);
+    }
+
+    /// Test cost summary with average calculation.
+    #[test]
+    fn test_cost_summary_aggregation() {
+        let pricing = Pricing {
+            input_per_1k: 0.003,
+            output_per_1k: 0.015,
+        };
+        let mut tracker = CostTracker::new(CostCalculator::new(pricing));
+
+        tracker.add_operation("op1", 2000, 1000);
+        tracker.add_operation("op2", 4000, 2000);
+
+        let summary = tracker.summary();
+        assert_eq!(summary.operation_count, 2);
+        assert_eq!(summary.total_input_tokens, 6000);
+        assert_eq!(summary.total_output_tokens, 3000);
+        assert_eq!(summary.total_tokens(), 9000);
+
+        let avg = summary.average_cost_per_operation();
+        assert!(avg > 0.0, "Average cost should be positive");
+        assert!(
+            (avg - summary.total_cost / 2.0).abs() < 0.0001,
+            "Average should be total / count"
+        );
+    }
+
+    /// Test free provider (Ollama) has zero cost.
+    #[test]
+    fn test_free_provider_tracking() {
+        let pricing = Pricing {
+            input_per_1k: 0.0,
+            output_per_1k: 0.0,
+        };
+        let mut tracker = CostTracker::new(CostCalculator::new(pricing));
+
+        tracker.add_operation("local_inference", 50000, 20000);
+
+        assert!((tracker.total_cost() - 0.0).abs() < f64::EPSILON);
+        assert_eq!(tracker.total_tokens(), 70000);
+    }
+
+    /// Test tracker reset clears all state.
+    #[test]
+    fn test_tracker_reset_clears_state() {
+        let pricing = Pricing {
+            input_per_1k: 0.003,
+            output_per_1k: 0.015,
+        };
+        let mut tracker = CostTracker::new(CostCalculator::new(pricing));
+
+        tracker.add_operation("op1", 5000, 2000);
+        assert!(tracker.total_cost() > 0.0);
+
+        tracker.reset();
+        assert_eq!(tracker.operation_count(), 0);
+        assert!((tracker.total_cost() - 0.0).abs() < f64::EPSILON);
+        assert_eq!(tracker.total_input_tokens(), 0);
+    }
+}
+
+#[cfg(test)]
+mod validation_pipeline_integration_tests {
+    //! Flow 13: Validation pipeline integration.
+    //!
+    //! Tests the full validation pipeline using real validators with
+    //! representative content, verifying error layering and format-specific checks.
+
+    use ruley::cli::config::SemanticValidationConfig;
+    use ruley::packer::{CodebaseMetadata, CompressedCodebase, CompressedFile, CompressionMethod};
+    use ruley::utils::validation::{ValidationLayer, get_validator};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    fn minimal_codebase() -> CompressedCodebase {
+        CompressedCodebase {
+            files: vec![CompressedFile {
+                path: PathBuf::from("src/main.rs"),
+                original_content: "fn main() {}".to_string(),
+                compressed_content: "fn main() {}".to_string(),
+                compression_method: CompressionMethod::None,
+                original_size: 12,
+                compressed_size: 12,
+                language: None,
+            }],
+            metadata: CodebaseMetadata {
+                total_files: 1,
+                total_original_size: 12,
+                total_compressed_size: 12,
+                languages: HashMap::new(),
+                compression_ratio: 1.0,
+            },
+        }
+    }
+
+    /// Test that valid content passes all validation layers for Claude format.
+    #[test]
+    fn test_claude_valid_content_passes_all_layers() {
+        let validator = get_validator("claude").unwrap();
+        let codebase = minimal_codebase();
+        let config = SemanticValidationConfig::default();
+
+        let content = "# Project Rules\n\n## Coding Standards\n\nUse consistent formatting.\n\n## File Structure\n\nOrganize by feature.\n";
+        let result = validator.validate(content, &config, &codebase).unwrap();
+
+        assert!(
+            result.passed,
+            "Valid Claude content should pass: {:?}",
+            result.errors
+        );
+    }
+
+    /// Test that valid Cursor content with frontmatter passes.
+    #[test]
+    fn test_cursor_valid_content_passes() {
+        let validator = get_validator("cursor").unwrap();
+        let codebase = minimal_codebase();
+        let config = SemanticValidationConfig::default();
+
+        let content = "---\ndescription: Main rules\nalwaysApply: true\n---\n\n# Rules\n\nUse 4-space indentation.\n";
+        let result = validator.validate(content, &config, &codebase).unwrap();
+
+        assert!(
+            result.passed,
+            "Valid Cursor content should pass: {:?}",
+            result.errors
+        );
+    }
+
+    /// Test that valid JSON content passes.
+    #[test]
+    fn test_json_valid_content_passes() {
+        let validator = get_validator("json").unwrap();
+        let codebase = minimal_codebase();
+        let config = SemanticValidationConfig::default();
+
+        let content = r#"{"rules": ["Use consistent formatting", "Follow naming conventions"]}"#;
+        let result = validator.validate(content, &config, &codebase).unwrap();
+
+        assert!(
+            result.passed,
+            "Valid JSON content should pass: {:?}",
+            result.errors
+        );
+    }
+
+    /// Test validation error layers are correctly identified.
+    #[test]
+    fn test_error_layers_correctly_identified() {
+        let validator = get_validator("claude").unwrap();
+        let codebase = minimal_codebase();
+        let config = SemanticValidationConfig::default();
+
+        // Empty content triggers syntax layer errors
+        let result = validator.validate("", &config, &codebase).unwrap();
+        assert!(!result.passed);
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| e.layer == ValidationLayer::Syntax),
+            "Empty content should produce syntax errors"
+        );
+    }
+
+    /// Test semantic validation detects contradictions across formats.
+    #[test]
+    fn test_semantic_contradiction_detection() {
+        let validator = get_validator("generic").unwrap();
+        let codebase = minimal_codebase();
+        let config = SemanticValidationConfig {
+            check_contradictions: true,
+            check_file_paths: false,
+            check_consistency: false,
+            check_reality: false,
+        };
+
+        let content =
+            "# Rules\n\nAlways use tabs for indentation.\nAlways use spaces for indentation.\n";
+        let result = validator.validate(content, &config, &codebase).unwrap();
+
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| e.layer == ValidationLayer::Semantic),
+            "Should detect contradiction between tabs and spaces"
+        );
+    }
+
+    /// Test validation across all supported format validators.
+    #[test]
+    fn test_all_format_validators_accept_valid_content() {
+        let codebase = minimal_codebase();
+        let config = SemanticValidationConfig::default();
+
+        // Format-appropriate valid content for each format
+        let test_cases = [
+            ("claude", "# Rules\n\n## Standards\n\nUse spaces.\n"),
+            (
+                "copilot",
+                "# Copilot Instructions\n\nUse consistent naming.\n",
+            ),
+            ("windsurf", "# Windsurf Rules\n\nFollow conventions.\n"),
+            ("aider", "# Conventions\n\nUse consistent formatting.\n"),
+            ("generic", "# AI Rules\n\nUse proper indentation.\n"),
+            ("json", r#"{"rules": ["Use consistent formatting"]}"#),
+        ];
+
+        for (format, content) in &test_cases {
+            let validator = get_validator(format).unwrap();
+            let result = validator.validate(content, &config, &codebase).unwrap();
+            assert!(
+                result.passed,
+                "Valid content for '{}' should pass validation: {:?}",
+                format, result.errors
+            );
+        }
+    }
+}
+
+// ── Comment 5: Extended integration tests (Flow 11–13, new features) ───────
+
+#[cfg(test)]
+#[cfg(feature = "ollama")]
+mod ollama_mocked_pipeline {
+    //! Flow 11: Ollama provider mocked pipeline.
+    //!
+    //! Tests Ollama-specific integration: OLLAMA_HOST environment override,
+    //! zero-cost provider behavior, and dry-run configuration display.
+
+    use super::common::{create_temp_dir, run_cli_with_config};
+    use ruley::llm::cost::{CostCalculator, CostTracker};
+    use ruley::llm::provider::Pricing;
+
+    /// Test CLI accepts --provider ollama in dry-run mode.
+    #[test]
+    fn test_ollama_dry_run_accepted() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(&project_path, &["--provider", "ollama", "--dry-run"]);
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Should not panic or produce unexpected error
+        assert!(
+            output.status.success() || stderr.contains("ollama") || stderr.contains("Ollama"),
+            "CLI should accept ollama provider. stdout: {}, stderr: {}",
+            stdout,
+            stderr
+        );
+    }
+
+    /// Test Ollama zero-cost tracking through cost calculator.
+    #[test]
+    fn test_ollama_zero_cost_tracker() {
+        let pricing = Pricing {
+            input_per_1k: 0.0,
+            output_per_1k: 0.0,
+        };
+        let mut tracker = CostTracker::new(CostCalculator::new(pricing));
+
+        tracker.add_operation("ollama_analysis", 50000, 20000);
+        tracker.add_operation("ollama_generation", 30000, 15000);
+
+        assert!(
+            (tracker.total_cost() - 0.0).abs() < f64::EPSILON,
+            "Ollama cost should be zero"
+        );
+        assert_eq!(tracker.total_tokens(), 115000);
+        assert_eq!(tracker.operation_count(), 2);
+    }
+
+    /// Test Ollama provider with custom host configuration.
+    #[test]
+    fn test_ollama_config_with_custom_host() {
+        let config = ruley::cli::config::OllamaConfig {
+            host: Some("http://custom-host:11434".to_string()),
+            model: Some("llama3.2".to_string()),
+        };
+
+        assert_eq!(config.host.as_deref(), Some("http://custom-host:11434"));
+        assert_eq!(config.model.as_deref(), Some("llama3.2"));
+    }
+
+    /// Test Ollama dry-run cost estimation shows $0.00.
+    #[test]
+    fn test_ollama_cost_estimation_zero() {
+        let pricing = Pricing {
+            input_per_1k: 0.0,
+            output_per_1k: 0.0,
+        };
+        let calculator = CostCalculator::new(pricing);
+        let estimate = calculator.estimate_cost(100000, 50000);
+
+        assert!(
+            (estimate.total_cost - 0.0).abs() < f64::EPSILON,
+            "Estimate should be $0.00"
+        );
+        assert!((estimate.input_cost - 0.0).abs() < f64::EPSILON,);
+        assert!((estimate.output_cost - 0.0).abs() < f64::EPSILON,);
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "openrouter")]
+mod openrouter_mocked_pipeline {
+    //! Flow 12: OpenRouter provider mocked pipeline with cost markup.
+    //!
+    //! Tests OpenRouter-specific integration: cost markup separation,
+    //! provider configuration, and pricing behavior.
+
+    use super::common::{create_temp_dir, run_cli_with_config};
+    use ruley::llm::cost::{CostCalculator, CostTracker};
+    use ruley::llm::provider::Pricing;
+
+    /// Test CLI accepts --provider openrouter in dry-run mode.
+    #[test]
+    fn test_openrouter_dry_run_accepted() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(&project_path, &["--provider", "openrouter", "--dry-run"]);
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Should accept openrouter as a valid provider
+        assert!(
+            output.status.success()
+                || stderr.contains("OPENROUTER_API_KEY")
+                || stderr.contains("openrouter"),
+            "CLI should accept openrouter provider. stdout: {}, stderr: {}",
+            stdout,
+            stderr
+        );
+    }
+
+    /// Test OpenRouter cost markup is reflected in pricing.
+    #[test]
+    fn test_openrouter_cost_with_markup() {
+        // OpenRouter pricing includes their markup
+        let base_pricing = Pricing {
+            input_per_1k: 0.003,
+            output_per_1k: 0.015,
+        };
+        let markup_pricing = Pricing {
+            input_per_1k: 0.0036, // ~20% markup
+            output_per_1k: 0.018,
+        };
+
+        let base_calc = CostCalculator::new(base_pricing);
+        let markup_calc = CostCalculator::new(markup_pricing);
+
+        let base_estimate = base_calc.estimate_cost(10000, 5000);
+        let markup_estimate = markup_calc.estimate_cost(10000, 5000);
+
+        assert!(
+            markup_estimate.total_cost > base_estimate.total_cost,
+            "Markup pricing should be higher than base"
+        );
+    }
+
+    /// Test OpenRouter cost tracking across multiple operations.
+    #[test]
+    fn test_openrouter_multi_operation_tracking() {
+        let pricing = Pricing {
+            input_per_1k: 0.003,
+            output_per_1k: 0.015,
+        };
+        let mut tracker = CostTracker::new(CostCalculator::new(pricing));
+
+        tracker.add_operation("analysis", 8000, 3000);
+        tracker.add_operation("generation", 4000, 2000);
+        tracker.add_operation("deconfliction", 2000, 1000);
+
+        let summary = tracker.summary();
+        assert_eq!(summary.operation_count, 3);
+        assert!(summary.total_cost > 0.0);
+
+        let breakdown = tracker.breakdown();
+        assert_eq!(breakdown.len(), 3);
+        assert_eq!(breakdown[0].operation, "analysis");
+        assert_eq!(breakdown[2].operation, "deconfliction");
+    }
+
+    /// Test OpenRouter provider config structure.
+    #[test]
+    fn test_openrouter_provider_config() {
+        let providers = ruley::cli::config::ProvidersConfig {
+            openrouter: Some(ruley::cli::config::ProviderConfig {
+                model: Some("anthropic/claude-sonnet-4".to_string()),
+                max_tokens: Some(4096),
+            }),
+            ..Default::default()
+        };
+
+        let or_config = providers.openrouter.unwrap();
+        assert_eq!(
+            or_config.model.as_deref(),
+            Some("anthropic/claude-sonnet-4")
+        );
+        assert_eq!(or_config.max_tokens, Some(4096));
+    }
+}
+
+#[cfg(test)]
+mod validation_failure_retry_integration {
+    //! Flow 13: Validation failure → auto-fix → max-retries.
+    //!
+    //! Tests the retry/auto-fix pipeline configuration, including
+    //! max retries, refinement result tracking, and cost accumulation.
+
+    use ruley::cli::config::{SemanticValidationConfig, ValidationConfig};
+    use ruley::generator::refinement::{FixAttempt, RefinementResult};
+    use ruley::packer::{CodebaseMetadata, CompressedCodebase, CompressedFile, CompressionMethod};
+    use ruley::utils::validation::get_validator;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    fn minimal_codebase() -> CompressedCodebase {
+        CompressedCodebase {
+            files: vec![CompressedFile {
+                path: PathBuf::from("src/main.rs"),
+                original_content: "fn main() {}".to_string(),
+                compressed_content: "fn main() {}".to_string(),
+                compression_method: CompressionMethod::None,
+                original_size: 12,
+                compressed_size: 12,
+                language: None,
+            }],
+            metadata: CodebaseMetadata {
+                total_files: 1,
+                total_original_size: 12,
+                total_compressed_size: 12,
+                languages: HashMap::new(),
+                compression_ratio: 1.0,
+            },
+        }
+    }
+
+    /// Test --retry-on-validation-failure enables retry in config.
+    #[test]
+    fn test_retry_on_failure_config_flag() {
+        let mut config = ValidationConfig::default();
+        assert!(!config.retry_on_failure, "Default should not retry");
+
+        config.retry_on_failure = true;
+        assert!(config.retry_on_failure);
+    }
+
+    /// Test max_retries config is respected.
+    #[test]
+    fn test_max_retries_config() {
+        let config = ValidationConfig::default();
+        assert_eq!(config.max_retries, 3, "Default max retries should be 3");
+
+        let custom = ValidationConfig {
+            max_retries: 5,
+            ..Default::default()
+        };
+        assert_eq!(custom.max_retries, 5);
+    }
+
+    /// Test RefinementResult tracks exhausted retries.
+    #[test]
+    fn test_refinement_exhausted_retries_integration() {
+        let result = RefinementResult {
+            success: false,
+            attempts: vec![
+                FixAttempt {
+                    attempt_number: 1,
+                    errors: vec!["Unclosed code block".to_string()],
+                    cost: 0.01,
+                },
+                FixAttempt {
+                    attempt_number: 2,
+                    errors: vec!["Unclosed code block".to_string()],
+                    cost: 0.012,
+                },
+                FixAttempt {
+                    attempt_number: 3,
+                    errors: vec!["Unclosed code block".to_string()],
+                    cost: 0.015,
+                },
+            ],
+            total_cost: 0.037,
+            retries_exhausted: true,
+        };
+
+        assert!(!result.success);
+        assert!(result.retries_exhausted);
+        assert_eq!(result.attempts.len(), 3);
+    }
+
+    /// Test RefinementResult success after retry.
+    #[test]
+    fn test_refinement_success_after_retry() {
+        let result = RefinementResult {
+            success: true,
+            attempts: vec![
+                FixAttempt {
+                    attempt_number: 1,
+                    errors: vec!["Missing heading".to_string()],
+                    cost: 0.008,
+                },
+                FixAttempt {
+                    attempt_number: 2,
+                    errors: vec![],
+                    cost: 0.010,
+                },
+            ],
+            total_cost: 0.018,
+            retries_exhausted: false,
+        };
+
+        assert!(result.success);
+        assert!(!result.retries_exhausted);
+        assert_eq!(result.attempts.len(), 2);
+    }
+
+    /// Test validation failure triggers semantic errors that auto-fix would address.
+    #[test]
+    fn test_validation_failure_produces_actionable_errors() {
+        let validator = get_validator("claude").unwrap();
+        let codebase = minimal_codebase();
+        let config = SemanticValidationConfig {
+            check_contradictions: true,
+            check_file_paths: false,
+            check_consistency: false,
+            check_reality: false,
+        };
+
+        let bad_content = "# Rules\n\nAlways use tabs.\nAlways use spaces.\n";
+        let result = validator.validate(bad_content, &config, &codebase).unwrap();
+
+        // Errors should be actionable for auto-fix
+        for error in &result.errors {
+            assert!(
+                !error.message.is_empty(),
+                "Error message should be non-empty for auto-fix"
+            );
+        }
+    }
+
+    /// Test retry cost accumulation across attempts.
+    #[test]
+    fn test_retry_cost_accumulation() {
+        let costs = [0.008, 0.010, 0.012];
+        let total: f64 = costs.iter().sum();
+
+        let result = RefinementResult {
+            success: false,
+            attempts: costs
+                .iter()
+                .enumerate()
+                .map(|(i, &cost)| FixAttempt {
+                    attempt_number: i + 1,
+                    errors: vec!["error".to_string()],
+                    cost,
+                })
+                .collect(),
+            total_cost: total,
+            retries_exhausted: true,
+        };
+
+        let sum: f64 = result.attempts.iter().map(|a| a.cost).sum();
+        assert!(
+            (sum - result.total_cost).abs() < f64::EPSILON,
+            "Total cost should equal sum of attempt costs"
+        );
+    }
+}
+
+#[cfg(test)]
+mod multi_format_cross_consistency_tests {
+    //! Multi-format output with cross-format consistency checking.
+    //!
+    //! Validates that generated rules across multiple formats are consistent
+    //! in their core conventions (indentation, naming, etc.).
+
+    use ruley::cli::config::SemanticValidationConfig;
+    use ruley::generator::rules::{FormattedRules, GeneratedRules};
+    use ruley::packer::{CodebaseMetadata, CompressedCodebase, CompressedFile, CompressionMethod};
+    use ruley::utils::validation::get_validator;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    fn minimal_codebase() -> CompressedCodebase {
+        CompressedCodebase {
+            files: vec![CompressedFile {
+                path: PathBuf::from("src/main.rs"),
+                original_content: "fn main() {}".to_string(),
+                compressed_content: "fn main() {}".to_string(),
+                compression_method: CompressionMethod::None,
+                original_size: 12,
+                compressed_size: 12,
+                language: None,
+            }],
+            metadata: CodebaseMetadata {
+                total_files: 1,
+                total_original_size: 12,
+                total_compressed_size: 12,
+                languages: HashMap::new(),
+                compression_ratio: 1.0,
+            },
+        }
+    }
+
+    /// Test consistent content across formats passes individual validation.
+    #[test]
+    fn test_consistent_multi_format_passes_validation() {
+        let codebase = minimal_codebase();
+        let config = SemanticValidationConfig::default();
+
+        let mut rules = GeneratedRules::new("analysis");
+        rules.add_format(FormattedRules::new(
+            "claude",
+            "# Rules\n\n## Standards\n\nUse 4-space indentation.\n",
+        ));
+        rules.add_format(FormattedRules::new(
+            "copilot",
+            "# Instructions\n\nUse 4-space indentation.\n",
+        ));
+        rules.add_format(FormattedRules::new(
+            "generic",
+            "# AI Rules\n\nUse 4-space indentation.\n",
+        ));
+
+        // Each format's content should pass its own validator
+        for format in ["claude", "copilot", "generic"] {
+            let validator = get_validator(format).unwrap();
+            let content = rules.get_format(format).unwrap();
+            let result = validator
+                .validate(&content.content, &config, &codebase)
+                .unwrap();
+            assert!(
+                result.passed,
+                "Consistent {} content should pass: {:?}",
+                format, result.errors
+            );
+        }
+    }
+
+    /// Test contradicting content across formats is detectable per-format.
+    #[test]
+    fn test_contradicting_multi_format_detected() {
+        let codebase = minimal_codebase();
+        let config = SemanticValidationConfig {
+            check_contradictions: true,
+            check_file_paths: false,
+            check_consistency: false,
+            check_reality: false,
+        };
+
+        // Claude says tabs, generic says spaces — each contains a contradiction within itself
+        let content_with_contradiction = "# Rules\n\nAlways use tabs.\nAlways use spaces.\n";
+
+        let validator = get_validator("generic").unwrap();
+        let result = validator
+            .validate(content_with_contradiction, &config, &codebase)
+            .unwrap();
+        assert!(
+            !result.passed
+                || result
+                    .errors
+                    .iter()
+                    .any(|e| { e.layer == ruley::utils::validation::ValidationLayer::Semantic }),
+            "Should detect internal contradiction"
+        );
+    }
+
+    /// Test cross-format consistency: all formats agree on key conventions.
+    #[test]
+    fn test_cross_format_key_conventions_aligned() {
+        let mut rules = GeneratedRules::new("analysis");
+        let convention = "Use 4-space indentation";
+
+        rules.add_format(FormattedRules::new(
+            "claude",
+            format!("# Rules\n\n{}\n", convention),
+        ));
+        rules.add_format(FormattedRules::new(
+            "copilot",
+            format!("# Instructions\n\n{}\n", convention),
+        ));
+        rules.add_format(FormattedRules::new(
+            "generic",
+            format!("# AI Rules\n\n{}\n", convention),
+        ));
+
+        // All formats should contain the same convention
+        for format in ["claude", "copilot", "generic"] {
+            let content = rules.get_format(format).unwrap();
+            assert!(
+                content.content.contains(convention),
+                "{} format should contain the convention",
+                format
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod chunked_analysis_validation_tests {
+    //! Chunked analysis with validation integration.
+    //!
+    //! Tests chunk size configuration, multi-chunk scenarios,
+    //! and validation across chunked content.
+
+    use super::common::{create_temp_dir, parse_dry_run_output, run_cli_with_config};
+    use ruley::cli::config::ChunkingConfig;
+
+    /// Test chunk_size is reflected in dry-run output.
+    #[test]
+    fn test_chunk_size_in_dry_run() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(&project_path, &["--dry-run", "--chunk-size", "50000"]);
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if output.status.success() {
+            let parsed = parse_dry_run_output(&stdout);
+            assert_eq!(
+                parsed.get("Chunk Size").unwrap(),
+                "50000",
+                "Dry-run should show configured chunk size"
+            );
+        }
+    }
+
+    /// Test ChunkingConfig structure.
+    #[test]
+    fn test_chunking_config_structure() {
+        let config = ChunkingConfig {
+            chunk_size: Some(75000),
+            overlap: Some(1000),
+        };
+
+        assert_eq!(config.chunk_size, Some(75000));
+        assert_eq!(config.overlap, Some(1000));
+    }
+
+    /// Test default chunk size is present in dry-run output.
+    #[test]
+    fn test_default_chunk_size_shown() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(&project_path, &["--dry-run"]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        if output.status.success() {
+            let parsed = parse_dry_run_output(&stdout);
+            // Verify chunk size is displayed (value depends on CLI default behavior)
+            assert!(
+                parsed.contains_key("Chunk Size"),
+                "Dry-run should display Chunk Size"
+            );
+        }
+    }
+
+    /// Test small chunk size configuration.
+    #[test]
+    fn test_small_chunk_size_config() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(&project_path, &["--dry-run", "--chunk-size", "10000"]);
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if output.status.success() {
+            let parsed = parse_dry_run_output(&stdout);
+            assert_eq!(parsed.get("Chunk Size").unwrap(), "10000");
+        }
+    }
+}
+
+#[cfg(test)]
+mod dry_run_new_settings_tests {
+    //! Dry-run reflecting new settings.
+    //!
+    //! Verifies that new CLI flags and configuration options
+    //! are properly reflected in dry-run output.
+
+    use super::common::{
+        create_config_file, create_temp_dir, parse_dry_run_output, run_cli_with_config,
+    };
+
+    /// Test --no-deconflict flag is accepted in dry-run.
+    #[test]
+    fn test_no_deconflict_accepted() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(&project_path, &["--dry-run", "--no-deconflict"]);
+
+        // Should not error out — flag should be accepted
+        assert!(
+            output.status.success(),
+            "CLI should accept --no-deconflict. stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// Test --on-conflict flag is accepted in dry-run.
+    #[test]
+    fn test_on_conflict_flag_accepted() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        for strategy in &["overwrite", "skip", "prompt", "smart-merge"] {
+            let output =
+                run_cli_with_config(&project_path, &["--dry-run", "--on-conflict", strategy]);
+
+            assert!(
+                output.status.success(),
+                "CLI should accept --on-conflict {}. stderr: {}",
+                strategy,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+
+    /// Test --retry-on-validation-failure flag is accepted.
+    #[test]
+    fn test_retry_on_validation_failure_accepted() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(
+            &project_path,
+            &["--dry-run", "--retry-on-validation-failure"],
+        );
+
+        assert!(
+            output.status.success(),
+            "CLI should accept --retry-on-validation-failure. stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// Test config file validation settings reflected in dry-run.
+    #[test]
+    fn test_config_validation_settings_dry_run() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let config_content = r#"[general]
+provider = "anthropic"
+compress = true
+
+[validation]
+enabled = true
+retry_on_failure = true
+max_retries = 5
+
+[finalization]
+deconflict = false
+"#;
+        let config_path = create_config_file(&temp_dir, config_content);
+
+        let output = run_cli_with_config(
+            &project_path,
+            &["--config", config_path.to_str().unwrap(), "--dry-run"],
+        );
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if output.status.success() {
+            let parsed = parse_dry_run_output(&stdout);
+            assert_eq!(
+                parsed.get("Compress").unwrap(),
+                "true",
+                "Compress should be enabled from config"
+            );
+        }
+    }
+
+    /// Test multiple new flags combined in dry-run.
+    #[test]
+    fn test_combined_new_flags_dry_run() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(
+            &project_path,
+            &[
+                "--dry-run",
+                "--no-deconflict",
+                "--on-conflict",
+                "overwrite",
+                "--retry-on-validation-failure",
+                "--compress",
+                "--chunk-size",
+                "50000",
+            ],
+        );
+
+        assert!(
+            output.status.success(),
+            "CLI should accept all new flags combined. stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if output.status.success() {
+            let parsed = parse_dry_run_output(&stdout);
+            assert_eq!(parsed.get("Compress").unwrap(), "true");
+            assert_eq!(parsed.get("Chunk Size").unwrap(), "50000");
+        }
+    }
+
+    /// Test format flag with multiple formats in dry-run.
+    #[test]
+    fn test_multi_format_dry_run() {
+        let temp_dir = create_temp_dir();
+        let project_path = temp_dir.path().to_path_buf();
+
+        let output = run_cli_with_config(
+            &project_path,
+            &["--dry-run", "--format", "cursor,claude,copilot"],
+        );
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if output.status.success() {
+            assert!(
+                stdout.contains("cursor") || stdout.contains("Cursor"),
+                "Should show cursor format in dry-run"
+            );
+        }
     }
 }

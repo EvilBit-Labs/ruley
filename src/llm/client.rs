@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::llm::provider::{CompletionOptions, CompletionResponse, LLMProvider, Message};
 use crate::utils::error::RuleyError;
 use std::time::Duration;
@@ -551,10 +554,7 @@ mod tests {
                     }),
                 }
             } else {
-                Ok(CompletionResponse {
-                    content: "Success".to_string(),
-                    tokens_used: 10,
-                })
+                Ok(CompletionResponse::new("Success".to_string(), 5, 5))
             }
         }
 

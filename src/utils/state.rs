@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! State management module for persisting user preferences and run metadata.
 //!
 //! This module manages persistent state stored in `.ruley/state.json`:

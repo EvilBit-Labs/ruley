@@ -1,21 +1,12 @@
-//! Progress bar management for CLI operations.
-//!
-//! This module provides utilities for displaying progress bars during long-running
-//! operations like file scanning, compression, and rule generation.
-//!
-//! # Overview
-//!
-//! - [`create_progress_bar`] - Simple single progress bar (backwards compatible)
-//! - [`ProgressManager`] - Multi-stage progress management with `MultiProgress`
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
 
 use console::Term;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
-/// Stage names for progress tracking.
-///
-/// These constants define the recognized stages for progress bar styling.
+/// Stage name constants for consistent progress tracking.
 pub mod stages {
     /// File discovery and scanning stage.
     pub const SCANNING: &str = "scanning";
@@ -25,6 +16,10 @@ pub mod stages {
     pub const ANALYZING: &str = "analyzing";
     /// Format-specific rule generation stage.
     pub const FORMATTING: &str = "formatting";
+    /// Validation stage.
+    pub const VALIDATING: &str = "validating";
+    /// Finalization stage.
+    pub const FINALIZING: &str = "finalizing";
     /// File writing stage.
     pub const WRITING: &str = "writing";
 }
@@ -43,10 +38,12 @@ pub mod stages {
 #[must_use]
 pub fn create_progress_bar(len: u64) -> ProgressBar {
     let pb = ProgressBar::new(len);
-    // Use unwrap_or_else to fall back to default style if template parsing fails
     let style = ProgressStyle::default_bar()
         .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
-        .unwrap_or_else(|_| ProgressStyle::default_bar())
+        .unwrap_or_else(|e| {
+            tracing::warn!("Failed to parse progress bar template: {e}");
+            ProgressStyle::default_bar()
+        })
         .progress_chars("#>-");
     pb.set_style(style);
     pb
@@ -120,6 +117,8 @@ impl ProgressManager {
     /// - **compressing**: `"[{bar:40.cyan/blue}] {pos}/{len} Compressing... ({msg})"`
     /// - **analyzing**: `"{spinner:.green} Analyzing... {msg}"` (spinner, no progress)
     /// - **formatting**: `"[{bar:40.cyan/blue}] {pos}/{len} Generating {msg} format"`
+    /// - **validating**: `"[{bar:40.cyan/blue}] {pos}/{len} Validating... {msg}"`
+    /// - **finalizing**: `"[{bar:40.cyan/blue}] {pos}/{len} Finalizing... {msg}"`
     /// - **writing**: `"[{bar:40.cyan/blue}] {pos}/{len} Writing files... {msg}"`
     ///
     /// Unknown stage names use a generic bar style.
@@ -177,15 +176,15 @@ impl ProgressManager {
     /// If the stage doesn't exist, this method does nothing (no error).
     pub fn finish(&self, stage: &str, message: &str) {
         if let Some(pb) = self.bars.get(stage) {
-            pb.set_message(message.to_string());
-            pb.finish();
+            pb.finish_and_clear();
+            let _ = self.multi.println(message);
         }
     }
 
     /// Finishes a stage with a styled "done" message.
     ///
-    /// Unlike [`finish`](Self::finish), this clears the progress bar and replaces
-    /// it with a checkmark and the provided message.
+    /// Clears the progress bar and prints the provided message above
+    /// any remaining bars via the `MultiProgress` handle.
     ///
     /// # Arguments
     ///
@@ -193,7 +192,8 @@ impl ProgressManager {
     /// * `message` - A completion message to display.
     pub fn finish_with_message(&self, stage: &str, message: &str) {
         if let Some(pb) = self.bars.get(stage) {
-            pb.finish_with_message(message.to_string());
+            pb.finish_and_clear();
+            let _ = self.multi.println(message);
         }
     }
 
@@ -217,6 +217,8 @@ impl ProgressManager {
             stages::COMPRESSING => "[{bar:40.cyan/blue}] {pos}/{len} Compressing... ({msg})",
             stages::ANALYZING => "{spinner:.green} Analyzing... {msg}",
             stages::FORMATTING => "[{bar:40.cyan/blue}] {pos}/{len} Generating {msg} format",
+            stages::VALIDATING => "[{bar:40.cyan/blue}] {pos}/{len} Validating... {msg}",
+            stages::FINALIZING => "[{bar:40.cyan/blue}] {pos}/{len} Finalizing... {msg}",
             stages::WRITING => "[{bar:40.cyan/blue}] {pos}/{len} Writing files... {msg}",
             // Default style for unknown stages
             _ => "[{bar:40.cyan/blue}] {pos}/{len} {msg}",
@@ -224,7 +226,13 @@ impl ProgressManager {
 
         ProgressStyle::default_bar()
             .template(template)
-            .unwrap_or_else(|_| ProgressStyle::default_bar())
+            .unwrap_or_else(|e| {
+                tracing::warn!(
+                    "Failed to parse progress style template for stage '{}': {e}",
+                    name
+                );
+                ProgressStyle::default_bar()
+            })
             .progress_chars("#>-")
     }
 
@@ -302,6 +310,8 @@ mod tests {
         let _ = ProgressManager::style_for_stage(stages::COMPRESSING);
         let _ = ProgressManager::style_for_stage(stages::ANALYZING);
         let _ = ProgressManager::style_for_stage(stages::FORMATTING);
+        let _ = ProgressManager::style_for_stage(stages::VALIDATING);
+        let _ = ProgressManager::style_for_stage(stages::FINALIZING);
         let _ = ProgressManager::style_for_stage(stages::WRITING);
         let _ = ProgressManager::style_for_stage("unknown");
     }

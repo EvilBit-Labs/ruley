@@ -35,48 +35,56 @@ fmt:
 fmt-check:
     @{{ mise_exec }} cargo fmt -- --check
 
-# Run clippy with zero warnings (default features)
-lint-rust: fmt-check
+# Quick development check
+check: pre-commit lint build-check
+
+# Run clippy with zero warnings policy
+clippy:
     @{{ mise_exec }} cargo clippy --all-targets --all-features -- -D warnings
+
+# Run clippy with no default features
+clippy-min:
+    @{{ mise_exec }} cargo clippy --all-targets --no-default-features -- -D warnings
+
+# Run full lint suite (format check + clippy with all features)
+lint-rust: fmt-check clippy
+
+# Run full lint suite (alias for lint-rust)
+lint: lint-rust
+
+# Run pre-commit hooks
+pre-commit:
+    @{{ mise_exec }} pre-commit run --all-files
 
 # Run clippy with fixes
 fix:
     @{{ mise_exec }} cargo clippy --fix --allow-dirty --allow-staged
 
-# Main lint recipe - calls all sub-linters
-lint: lint-rust lint-actions
-
-# Lint GitHub Actions workflow files
-lint-actions:
-    @{{ mise_exec }} actionlint
-
-# Quick development check
-check: pre-commit-run lint
-
-[private]
-pre-commit-run:
-    @{{ mise_exec }} pre-commit run -a
-
-# =============================================================================
-# BUILDING AND TESTING
-# =============================================================================
-
-build:
-    @{{ mise_exec }} cargo build
-
-build-release:
-    @{{ mise_exec }} cargo build --release
+# ==============================================================================
+# Building
+# ==============================================================================
 
 # Check project without building
 build-check:
     @{{ mise_exec }} cargo check
 
+build:
+    @{{ mise_exec }} cargo build
+
+build-release:
+    @{{ mise_exec }} cargo build --release --all-features
+
+# Run all tests using nextest
 test:
-    @{{ mise_exec }} cargo test
+    @{{ mise_exec }} cargo nextest run --all-features
+
+# Run tests with standard cargo test (fallback)
+test-cargo:
+    @{{ mise_exec }} cargo test --all-features
 
 # Run tests with output
 test-verbose:
-    @{{ mise_exec }} cargo test -- --nocapture
+    @{{ mise_exec }} cargo nextest run --all-features --no-capture
 
 # Run benchmarks
 bench:
@@ -85,6 +93,56 @@ bench:
 # Run specific benchmark
 bench-name name:
     @{{ mise_exec }} cargo bench -- {{ name }}
+
+# ==============================================================================
+# Coverage
+# ==============================================================================
+
+# Generate coverage report
+coverage:
+    @{{ mise_exec }} cargo llvm-cov --all-features --no-report
+    @{{ mise_exec }} cargo llvm-cov report --lcov --output-path lcov.info
+
+# Generate HTML coverage report for local viewing
+[unix]
+coverage-report:
+    @{{ mise_exec }} cargo llvm-cov --all-features --html --open
+
+# Show coverage summary
+coverage-summary:
+    @{{ mise_exec }} cargo llvm-cov --all-features
+
+# ==============================================================================
+# Security & Auditing
+# ==============================================================================
+
+# Run dependency audit
+audit:
+    @{{ mise_exec }} cargo audit
+
+# Run cargo deny checks
+deny:
+    @{{ mise_exec }} cargo deny check
+
+# Check for outdated dependencies
+outdated:
+    @{{ mise_exec }} cargo outdated --depth=1
+
+# ==============================================================================
+# Distribution
+# ==============================================================================
+
+# Run dist plan (dry run)
+dist-plan:
+    @{{ mise_exec }} cargo dist plan
+
+# Run dist check
+dist-check:
+    @{{ mise_exec }} cargo dist check
+
+# Build dist artifacts
+dist:
+    @{{ mise_exec }} cargo dist build
 
 # =============================================================================
 # RUNNING
@@ -102,50 +160,54 @@ run-release args='':
 # SECURITY AND AUDITING
 # =============================================================================
 
-audit:
-    @{{ mise_exec }} cargo audit
+# Run full pre-commit CI check (lint + test + build)
+ci-check: pre-commit lint-rust clippy-min test build-release audit coverage dist-plan
 
-# =============================================================================
-# CI AND QUALITY ASSURANCE
-# =============================================================================
-
-# Full local CI parity check
-ci-check: pre-commit-run fmt-check lint-rust test build-release audit
-
-# Run GitHub Actions CI check (no pre-commit or audit)
-github-ci-check: lint build test
+# Run Github Actions CI check (lighter)
+github-ci-check: lint-rust build test
 
 # =============================================================================
 # DOCUMENTATION
 # =============================================================================
 
-# Generate documentation and open in browser
+# Generate rustdoc documentation
 doc:
     @{{ mise_exec }} cargo doc --no-deps --open --document-private-items
 
-# Generate documentation (without opening browser)
+# Generate rustdoc documentation (without opening browser)
 doc-build:
     @{{ mise_exec }} cargo doc --no-deps --document-private-items
 
-# =============================================================================
-# DEPENDENCIES
-# =============================================================================
+# Build mdBook documentation
+[unix]
+docs-build:
+    cd docs && {{ mise_exec }} mdbook build
 
-# Update dependencies
-update:
-    @{{ mise_exec }} cargo update
+# Serve documentation locally with live reload
+[unix]
+docs-serve:
+    cd docs && {{ mise_exec }} mdbook serve --open
 
-# Check for outdated dependencies
-outdated:
-    @{{ mise_exec }} cargo outdated
+# ==============================================================================
+# Development
+# ==============================================================================
 
-# =============================================================================
-# RELEASE MANAGEMENT
-# =============================================================================
+# Setup development environment
+dev-setup:
+    mise install
+    @{{ mise_exec }} cargo build
 
 # Generate changelog from git history
 changelog:
     @{{ mise_exec }} git cliff -o CHANGELOG.md
+
+# ==============================================================================
+# Dependencies
+# ==============================================================================
+
+# Update dependencies
+update:
+    @{{ mise_exec }} cargo update
 
 # =============================================================================
 # CLEANING

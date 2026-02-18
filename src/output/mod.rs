@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Output formatters for generating IDE-specific rule files.
 //!
 //! This module provides the `OutputFormatter` trait and implementations for
@@ -40,7 +43,7 @@ pub use cursor::CursorFormatter;
 pub use generic::GenericFormatter;
 pub use json::JsonFormatter;
 pub use windsurf::WindsurfFormatter;
-pub use writer::{OutputResult, WriteOptions, write_output};
+pub use writer::{ConflictStrategy, OutputResult, WriteOptions, write_output};
 
 use crate::generator::rules::GeneratedRules;
 use crate::utils::error::RuleyError;

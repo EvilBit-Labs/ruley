@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Chunk analysis and merge logic for processing large codebases.
 //!
 //! This module provides functionality to process large codebases that have been
@@ -26,7 +29,8 @@ use tracing::{debug, info};
 
 /// Result of analyzing a single chunk.
 ///
-/// Contains the chunk identifier and the LLM's analysis output for that chunk.
+/// Contains the chunk identifier, the LLM's analysis output, and separate
+/// prompt/completion token counts from the provider response.
 #[derive(Debug, Clone)]
 pub struct ChunkResult {
     /// The chunk ID (0-indexed).
@@ -35,25 +39,41 @@ pub struct ChunkResult {
     /// The analysis output from the LLM for this chunk.
     pub analysis: String,
 
-    /// Number of tokens used for this chunk analysis.
-    pub tokens_used: usize,
+    /// Number of prompt/input tokens used for this chunk analysis.
+    pub prompt_tokens: usize,
+
+    /// Number of completion/output tokens used for this chunk analysis.
+    pub completion_tokens: usize,
 }
 
 impl ChunkResult {
-    /// Create a new chunk result.
+    /// Create a new chunk result with separate prompt and completion token counts.
     ///
     /// # Arguments
     ///
     /// * `chunk_id` - The ID of the analyzed chunk
     /// * `analysis` - The LLM's analysis output
-    /// * `tokens_used` - Number of tokens used
+    /// * `prompt_tokens` - Number of prompt/input tokens reported by the provider
+    /// * `completion_tokens` - Number of completion/output tokens reported by the provider
     #[must_use]
-    pub fn new(chunk_id: usize, analysis: String, tokens_used: usize) -> Self {
+    pub fn new(
+        chunk_id: usize,
+        analysis: String,
+        prompt_tokens: usize,
+        completion_tokens: usize,
+    ) -> Self {
         Self {
             chunk_id,
             analysis,
-            tokens_used,
+            prompt_tokens,
+            completion_tokens,
         }
+    }
+
+    /// Total tokens used (prompt + completion).
+    #[must_use]
+    pub fn total_tokens(&self) -> usize {
+        self.prompt_tokens + self.completion_tokens
     }
 }
 
@@ -83,6 +103,108 @@ impl From<&AnalysisOptions> for CompletionOptions {
             temperature: opts.temperature,
         }
     }
+}
+
+/// Result of a full analysis including per-chunk token counts.
+///
+/// Contains the merged analysis text along with individual chunk results
+/// and merge-step token counts, enabling accurate cost tracking from
+/// provider-reported values.
+#[derive(Debug, Clone)]
+pub struct AnalysisResult {
+    /// The final merged analysis text.
+    pub merged_analysis: String,
+    /// Per-chunk results with provider-reported token counts.
+    pub chunk_results: Vec<ChunkResult>,
+    /// Prompt tokens used in the merge step (0 if single chunk).
+    pub merge_prompt_tokens: usize,
+    /// Completion tokens used in the merge step (0 if single chunk).
+    pub merge_completion_tokens: usize,
+}
+
+/// Analyze a codebase and return detailed results with per-chunk token counts.
+///
+/// Like [`analyze_chunked`] but returns an [`AnalysisResult`] with provider-reported
+/// token counts for accurate cost tracking.
+pub async fn analyze_chunked_with_results(
+    chunks: Vec<Chunk>,
+    prompt_template: &str,
+    client: &LLMClient,
+) -> Result<AnalysisResult, RuleyError> {
+    if chunks.is_empty() {
+        return Err(RuleyError::ValidationError {
+            message: "No chunks to analyze".to_string(),
+            suggestion: "Ensure the codebase has content before analysis".to_string(),
+        });
+    }
+
+    let total_chunks = chunks.len();
+    let options = AnalysisOptions::default();
+
+    if total_chunks == 1 {
+        info!("Analyzing single chunk (no merge required)");
+        let chunk = &chunks[0];
+        let prompt = build_single_chunk_prompt(prompt_template, &chunk.content);
+        let messages = vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }];
+
+        let completion_options = CompletionOptions::from(&options);
+        let response = client.complete(&messages, &completion_options).await?;
+
+        debug!(
+            prompt_tokens = response.prompt_tokens,
+            completion_tokens = response.completion_tokens,
+            "Single chunk analysis complete"
+        );
+
+        let chunk_result = ChunkResult::new(
+            chunk.id,
+            response.content.clone(),
+            response.prompt_tokens,
+            response.completion_tokens,
+        );
+
+        return Ok(AnalysisResult {
+            merged_analysis: response.content,
+            chunk_results: vec![chunk_result],
+            merge_prompt_tokens: 0,
+            merge_completion_tokens: 0,
+        });
+    }
+
+    info!(total_chunks = total_chunks, "Analyzing multiple chunks");
+
+    let chunk_results =
+        analyze_chunks_sequentially(&chunks, prompt_template, client, &options).await?;
+
+    // Merge all chunk results, capturing merge-step token counts
+    let merge_prompt = build_merge_prompt(&chunk_results);
+    let merge_messages = vec![Message {
+        role: "user".to_string(),
+        content: merge_prompt,
+    }];
+
+    let merge_options = CompletionOptions {
+        max_tokens: options.max_tokens.map(|t| t.saturating_mul(2)),
+        temperature: options.temperature,
+    };
+
+    let merge_response = client.complete(&merge_messages, &merge_options).await?;
+
+    debug!(
+        prompt_tokens = merge_response.prompt_tokens,
+        completion_tokens = merge_response.completion_tokens,
+        "Chunk results merged successfully"
+    );
+
+    Ok(AnalysisResult {
+        merged_analysis: merge_response.content,
+        chunk_results,
+        merge_prompt_tokens: merge_response.prompt_tokens,
+        merge_completion_tokens: merge_response.completion_tokens,
+    })
 }
 
 /// Analyze a codebase that has been split into chunks.
@@ -170,7 +292,8 @@ pub async fn analyze_chunked_with_options(
         let response = client.complete(&messages, &completion_options).await?;
 
         debug!(
-            tokens_used = response.tokens_used,
+            prompt_tokens = response.prompt_tokens,
+            completion_tokens = response.completion_tokens,
             "Single chunk analysis complete"
         );
         return Ok(response.content);
@@ -228,14 +351,16 @@ async fn analyze_chunks_sequentially(
 
         debug!(
             chunk = chunk_number,
-            tokens_used = response.tokens_used,
+            prompt_tokens = response.prompt_tokens,
+            completion_tokens = response.completion_tokens,
             "Chunk analysis complete"
         );
 
         results.push(ChunkResult::new(
             chunk.id,
             response.content,
-            response.tokens_used,
+            response.prompt_tokens,
+            response.completion_tokens,
         ));
     }
 
@@ -310,7 +435,8 @@ pub async fn merge_chunk_results(
     let response = client.complete(&messages, &merge_options).await?;
 
     debug!(
-        tokens_used = response.tokens_used,
+        prompt_tokens = response.prompt_tokens,
+        completion_tokens = response.completion_tokens,
         "Chunk results merged successfully"
     );
 
@@ -434,10 +560,7 @@ mod tests {
                 .cloned()
                 .unwrap_or_else(|| format!("Response {}", idx));
 
-            Ok(CompletionResponse {
-                content: response,
-                tokens_used: 100,
-            })
+            Ok(CompletionResponse::new(response, 50, 50))
         }
 
         fn model(&self) -> &str {
@@ -463,10 +586,12 @@ mod tests {
 
     #[test]
     fn test_chunk_result_new() {
-        let result = ChunkResult::new(0, "Analysis output".to_string(), 150);
+        let result = ChunkResult::new(0, "Analysis output".to_string(), 100, 50);
         assert_eq!(result.chunk_id, 0);
         assert_eq!(result.analysis, "Analysis output");
-        assert_eq!(result.tokens_used, 150);
+        assert_eq!(result.prompt_tokens, 100);
+        assert_eq!(result.completion_tokens, 50);
+        assert_eq!(result.total_tokens(), 150);
     }
 
     #[test]
@@ -506,8 +631,8 @@ mod tests {
     #[test]
     fn test_build_merge_prompt() {
         let results = vec![
-            ChunkResult::new(0, "Analysis 1".to_string(), 100),
-            ChunkResult::new(1, "Analysis 2".to_string(), 100),
+            ChunkResult::new(0, "Analysis 1".to_string(), 50, 50),
+            ChunkResult::new(1, "Analysis 2".to_string(), 50, 50),
         ];
 
         let prompt = build_merge_prompt(&results);
@@ -580,7 +705,7 @@ mod tests {
         let provider = MockAnalysisProvider::new(vec![]);
         let client = LLMClient::new(Box::new(provider));
 
-        let results = vec![ChunkResult::new(0, "Only analysis".to_string(), 100)];
+        let results = vec![ChunkResult::new(0, "Only analysis".to_string(), 50, 50)];
 
         let merged = merge_chunk_results(results, &client, &AnalysisOptions::default()).await;
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Cost calculation and tracking for LLM operations.
 //!
 //! This module provides structures for calculating LLM costs based on provider pricing
@@ -10,19 +13,19 @@
 //! use ruley::llm::provider::Pricing;
 //!
 //! // Create a calculator for Anthropic Claude Sonnet pricing
-//! // Pricing struct uses $ per 1K tokens (e.g., $3/1K input, $15/1K output)
+//! // Pricing struct uses USD per 1K tokens (e.g., $0.003/1K input, $0.015/1K output)
 //! let pricing = Pricing {
-//!     input_per_1k: 3.0,
-//!     output_per_1k: 15.0,
+//!     input_per_1k: 0.003,
+//!     output_per_1k: 0.015,
 //! };
 //! let calculator = CostCalculator::new(pricing);
 //!
 //! // Calculate cost for a single request
-//! // 1000 input tokens = 1.0 * $3 = $3
-//! // 500 output tokens = 0.5 * $15 = $7.5
-//! // Total = $10.5
+//! // 1000 input tokens = 1.0 * $0.003 = $0.003
+//! // 500 output tokens = 0.5 * $0.015 = $0.0075
+//! // Total = $0.0105
 //! let cost = calculator.calculate_cost(1000, 500);
-//! assert!((cost - 10.5).abs() < 0.0001);
+//! assert!((cost - 0.0105).abs() < 0.0001);
 //!
 //! // Track costs across multiple operations
 //! let mut tracker = CostTracker::new(calculator);
@@ -125,7 +128,7 @@ pub struct CostBreakdown {
 ///
 /// // 1000 input tokens, 500 output tokens
 /// let cost = calculator.calculate_cost(1000, 500);
-/// // cost = (1000/1000 * 3.0) + (500/1000 * 15.0) = 3.0 + 7.5 = 10.5
+/// // cost = (1000/1000 * 0.003) + (500/1000 * 0.015) = 0.003 + 0.0075 = 0.0105
 /// ```
 #[derive(Debug, Clone)]
 pub struct CostCalculator {
@@ -225,8 +228,8 @@ impl CostCalculator {
 /// use ruley::llm::provider::Pricing;
 ///
 /// let pricing = Pricing {
-///     input_per_1k: 3.0,
-///     output_per_1k: 15.0,
+///     input_per_1k: 0.003,
+///     output_per_1k: 0.015,
 /// };
 /// let calculator = CostCalculator::new(pricing);
 /// let mut tracker = CostTracker::new(calculator);
@@ -399,15 +402,15 @@ mod tests {
 
     fn anthropic_pricing() -> Pricing {
         Pricing {
-            input_per_1k: 3.0,
-            output_per_1k: 15.0,
+            input_per_1k: 0.003,  // $0.003 per 1K input tokens
+            output_per_1k: 0.015, // $0.015 per 1K output tokens
         }
     }
 
     fn openai_pricing() -> Pricing {
         Pricing {
-            input_per_1k: 2.5,
-            output_per_1k: 10.0,
+            input_per_1k: 0.0025, // $0.0025 per 1K input tokens
+            output_per_1k: 0.010, // $0.010 per 1K output tokens
         }
     }
 
@@ -416,11 +419,11 @@ mod tests {
         let calc = CostCalculator::new(anthropic_pricing());
 
         // 1000 input tokens, 500 output tokens
-        // Input: 1.0 * 3.0 = 3.0
-        // Output: 0.5 * 15.0 = 7.5
-        // Total: 10.5
+        // Input: 1.0 * 0.003 = 0.003
+        // Output: 0.5 * 0.015 = 0.0075
+        // Total: 0.0105
         let cost = calc.calculate_cost(1000, 500);
-        assert!((cost - 10.5).abs() < 0.0001);
+        assert!((cost - 0.0105).abs() < 0.0001);
     }
 
     #[test]
@@ -428,11 +431,11 @@ mod tests {
         let calc = CostCalculator::new(openai_pricing());
 
         // 1000 input tokens, 500 output tokens
-        // Input: 1.0 * 2.5 = 2.5
-        // Output: 0.5 * 10.0 = 5.0
-        // Total: 7.5
+        // Input: 1.0 * 0.0025 = 0.0025
+        // Output: 0.5 * 0.010 = 0.005
+        // Total: 0.0075
         let cost = calc.calculate_cost(1000, 500);
-        assert!((cost - 7.5).abs() < 0.0001);
+        assert!((cost - 0.0075).abs() < 0.0001);
     }
 
     #[test]
@@ -447,11 +450,11 @@ mod tests {
         let calc = CostCalculator::new(anthropic_pricing());
 
         // 100K input, 50K output (typical large request)
-        // Input: 100.0 * 3.0 = 300.0
-        // Output: 50.0 * 15.0 = 750.0
-        // Total: 1050.0
+        // Input: 100.0 * 0.003 = 0.3
+        // Output: 50.0 * 0.015 = 0.75
+        // Total: 1.05
         let cost = calc.calculate_cost(100_000, 50_000);
-        assert!((cost - 1050.0).abs() < 0.0001);
+        assert!((cost - 1.05).abs() < 0.0001);
     }
 
     #[test]
@@ -459,12 +462,12 @@ mod tests {
         let calc = CostCalculator::new(anthropic_pricing());
         let estimate = calc.estimate_cost(5000, 2000);
 
-        // Input: 5.0 * 3.0 = 15.0
-        // Output: 2.0 * 15.0 = 30.0
-        // Total: 45.0
-        assert!((estimate.input_cost - 15.0).abs() < 0.0001);
-        assert!((estimate.output_cost - 30.0).abs() < 0.0001);
-        assert!((estimate.total_cost - 45.0).abs() < 0.0001);
+        // Input: 5.0 * 0.003 = 0.015
+        // Output: 2.0 * 0.015 = 0.030
+        // Total: 0.045
+        assert!((estimate.input_cost - 0.015).abs() < 0.0001);
+        assert!((estimate.output_cost - 0.030).abs() < 0.0001);
+        assert!((estimate.total_cost - 0.045).abs() < 0.0001);
         assert_eq!(estimate.input_tokens, 5000);
         assert_eq!(estimate.output_tokens, 2000);
         assert_eq!(estimate.total_tokens(), 7000);
@@ -474,14 +477,16 @@ mod tests {
     fn test_calculate_input_cost() {
         let calc = CostCalculator::new(anthropic_pricing());
         let cost = calc.calculate_input_cost(5000);
-        assert!((cost - 15.0).abs() < 0.0001);
+        // 5.0 * 0.003 = 0.015
+        assert!((cost - 0.015).abs() < 0.0001);
     }
 
     #[test]
     fn test_calculate_output_cost() {
         let calc = CostCalculator::new(anthropic_pricing());
         let cost = calc.calculate_output_cost(2000);
-        assert!((cost - 30.0).abs() < 0.0001);
+        // 2.0 * 0.015 = 0.030
+        assert!((cost - 0.030).abs() < 0.0001);
     }
 
     #[test]
@@ -490,7 +495,8 @@ mod tests {
         tracker.add_operation("test_op", 1000, 500);
 
         assert_eq!(tracker.operation_count(), 1);
-        assert!((tracker.total_cost() - 10.5).abs() < 0.0001);
+        // 1.0 * 0.003 + 0.5 * 0.015 = 0.003 + 0.0075 = 0.0105
+        assert!((tracker.total_cost() - 0.0105).abs() < 0.0001);
         assert_eq!(tracker.total_input_tokens(), 1000);
         assert_eq!(tracker.total_output_tokens(), 500);
         assert_eq!(tracker.total_tokens(), 1500);
@@ -500,15 +506,16 @@ mod tests {
     fn test_cost_tracker_multiple_operations() {
         let mut tracker = CostTracker::from_pricing(anthropic_pricing());
 
-        // Operation 1: 5000 in, 2000 out = 15 + 30 = 45
+        // Operation 1: 5000 in, 2000 out = 0.015 + 0.030 = 0.045
         tracker.add_operation("initial_analysis", 5000, 2000);
-        // Operation 2: 3000 in, 1500 out = 9 + 22.5 = 31.5
+        // Operation 2: 3000 in, 1500 out = 0.009 + 0.0225 = 0.0315
         tracker.add_operation("chunk_1", 3000, 1500);
-        // Operation 3: 4000 in, 3000 out = 12 + 45 = 57
+        // Operation 3: 4000 in, 3000 out = 0.012 + 0.045 = 0.057
         tracker.add_operation("merge", 4000, 3000);
 
         assert_eq!(tracker.operation_count(), 3);
-        assert!((tracker.total_cost() - 133.5).abs() < 0.0001);
+        // Total: 0.045 + 0.0315 + 0.057 = 0.1335
+        assert!((tracker.total_cost() - 0.1335).abs() < 0.0001);
         assert_eq!(tracker.total_input_tokens(), 12000);
         assert_eq!(tracker.total_output_tokens(), 6500);
         assert_eq!(tracker.total_tokens(), 18500);
@@ -560,12 +567,12 @@ mod tests {
     #[test]
     fn test_cost_summary_average() {
         let mut tracker = CostTracker::from_pricing(anthropic_pricing());
-        // op1: 10.5, op2: 21.0 => total: 31.5, avg: 15.75
+        // op1: 0.0105, op2: 0.021 => total: 0.0315, avg: 0.01575
         tracker.add_operation("op1", 1000, 500);
         tracker.add_operation("op2", 2000, 1000);
 
         let summary = tracker.summary();
-        assert!((summary.average_cost_per_operation() - 15.75).abs() < 0.0001);
+        assert!((summary.average_cost_per_operation() - 0.01575).abs() < 0.0001);
     }
 
     #[test]

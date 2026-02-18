@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 the ruley contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! GitHub Copilot output formatter.
 //!
 //! Generates copilot-instructions.md files for GitHub Copilot.

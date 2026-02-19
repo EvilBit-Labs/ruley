@@ -10,11 +10,7 @@ Tame your unruly codebase. Make it _ruley_.
 
 ## Project Status
 
-**v1.0.0** -- Production ready.
-
-- 496 tests with zero unsafe code (`unsafe_code = "deny"` enforced project-wide)
-- Zero warnings with strict clippy linting (pedantic + nursery + cargo)
-- Published on [crates.io](https://crates.io/crates/ruley)
+**v1.0.0** -- Production ready. Published on [crates.io](https://crates.io/crates/ruley).
 
 ## Features
 
@@ -41,15 +37,15 @@ Tame your unruly codebase. Make it _ruley_.
 
 ## Supported Providers
 
-| Provider          | Feature Flag          | Environment Variable   |
-| ----------------- | --------------------- | ---------------------- |
-| **Anthropic**     | `anthropic` (default) | `ANTHROPIC_API_KEY`    |
-| **OpenAI**        | `openai` (default)    | `OPENAI_API_KEY`       |
-| **Ollama**        | `ollama`              | (local, no key needed) |
-| **OpenRouter**    | `openrouter`          | `OPENROUTER_API_KEY`   |
-| **xAI**           | `xai`                 | `XAI_API_KEY`          |
-| **Groq**          | `groq`                | `GROQ_API_KEY`         |
-| **Google Gemini** | `gemini`              | `GEMINI_API_KEY`       |
+| Provider          | Environment Variable   |
+| ----------------- | ---------------------- |
+| **Anthropic**     | `ANTHROPIC_API_KEY`    |
+| **OpenAI**        | `OPENAI_API_KEY`       |
+| **Ollama**        | (local, no key needed) |
+| **OpenRouter**    | `OPENROUTER_API_KEY`   |
+| **xAI**           | `XAI_API_KEY`          |
+| **Groq**          | `GROQ_API_KEY`         |
+| **Google Gemini** | `GEMINI_API_KEY`       |
 
 ## Installation
 
@@ -144,33 +140,11 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
 ```
 
-## Architecture
+## How It Works
 
-```text
-Codebase --> Packer --> LLM Analysis --> Rule Generation --> Formatted Output
-                |                            |
-          File Discovery            Prompt Templates
-          Git Operations            Multi-format
-          Compression               Cost Estimation
-```
+ruley scans your codebase, compresses it for token efficiency, sends it to an LLM for analysis, and writes format-specific rule files. Your API keys are never stored -- they're read from environment variables and used only for the duration of the run.
 
-| Module       | Purpose                                                                      |
-| ------------ | ---------------------------------------------------------------------------- |
-| `cli/`       | Command-line interface with clap argument parsing                            |
-| `packer/`    | Repository packing (file discovery, gitignore, git operations, compression)  |
-| `llm/`       | Multi-provider LLM integration (Anthropic, OpenAI, Ollama, OpenRouter, etc.) |
-| `generator/` | Rule generation logic and prompt templates                                   |
-| `output/`    | Multi-format output formatters and file writers                              |
-| `utils/`     | Shared utilities (error types, progress bars, cost display)                  |
-
-## Security
-
-- **Memory Safety**: `unsafe_code = "deny"` enforced project-wide
-- **No hardcoded credentials**: API keys via environment variables only
-- **Input validation**: Comprehensive validation at all boundaries
-- **Dependency auditing**: `cargo audit` and `cargo deny` run in CI
-
-For vulnerability reporting, see [SECURITY.md](SECURITY.md).
+For vulnerability reporting, see [SECURITY.md](SECURITY.md). For architecture details, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contributing
 
@@ -179,13 +153,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding guidelines,
 ## License
 
 Licensed under the Apache License 2.0 -- see [LICENSE](LICENSE) for details.
-
-All source files include SPDX license identifiers:
-
-```rust
-// Copyright (c) 2025-2026 the ruley contributors
-// SPDX-License-Identifier: Apache-2.0
-```
 
 ## Support
 

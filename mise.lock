@@ -1,3 +1,7 @@
+[[tools.act]]
+version = "0.2.84"
+backend = "aqua:nektos/act"
+
 [[tools.actionlint]]
 version = "1.7.11"
 backend = "aqua:rhysd/actionlint"

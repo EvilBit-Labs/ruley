@@ -26,18 +26,17 @@ jobs:
         if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-            - name: Setup Rust
-              uses: dtolnay/rust-toolchain@0dd4a6d07aedb0ef7f65e79f3e229a6c102ae2e0 # 1.91.0
-
-            - uses: taiki-e/install-action@288875dd3d64326724fa6d9593062d9f8ba0b131 # v2
+            - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
               with:
-                  tool: cargo-outdated,cargo-dist
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: EmbarkStudios/cargo-deny-action@82eb9f621fbc699dd0918f3ea06864c14cc84246 # v2
+            - name: Run cargo deny check
+              run: just deny
 
             - name: Run cargo outdated
-              run: cargo outdated --depth=1
+              run: cargo outdated --depth=1 --exit-code=1
 
             - name: Run cargo dist check
-              run: cargo dist check
+              run: just dist-check

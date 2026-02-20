@@ -661,16 +661,16 @@ fn handle_backup_and_write(
 
 /// Ensure the parent directory of a path exists.
 fn ensure_parent_dir(path: &Path) -> Result<(), RuleyError> {
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                RuleyError::OutputFormat(format!(
-                    "Failed to create directory {}: {}",
-                    parent.display(),
-                    e
-                ))
-            })?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.exists()
+    {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            RuleyError::OutputFormat(format!(
+                "Failed to create directory {}: {}",
+                parent.display(),
+                e
+            ))
+        })?;
     }
     Ok(())
 }

@@ -475,19 +475,19 @@ pub async fn run(config: MergedConfig) -> Result<()> {
     ctx.compressed_codebase = Some(compressed_codebase);
 
     // Write compressed codebase summary to cache
-    if let Some(ref cache) = ctx.cache_manager {
-        if let Some(ref codebase) = ctx.compressed_codebase {
-            // Create a summary string of the compressed codebase for caching
-            let summary = format!(
-                "Files: {}\nTotal size: {} bytes\nCompression ratio: {:.2}",
-                codebase.metadata.total_files,
-                codebase.metadata.total_compressed_size,
-                codebase.metadata.compression_ratio
-            );
-            let path = cache.write_compressed_codebase(&summary)?;
-            ctx.temp_files.add(path);
-            tracing::debug!("Cached compressed codebase summary");
-        }
+    if let Some(ref cache) = ctx.cache_manager
+        && let Some(ref codebase) = ctx.compressed_codebase
+    {
+        // Create a summary string of the compressed codebase for caching
+        let summary = format!(
+            "Files: {}\nTotal size: {} bytes\nCompression ratio: {:.2}",
+            codebase.metadata.total_files,
+            codebase.metadata.total_compressed_size,
+            codebase.metadata.compression_ratio
+        );
+        let path = cache.write_compressed_codebase(&summary)?;
+        ctx.temp_files.add(path);
+        tracing::debug!("Cached compressed codebase summary");
     }
 
     // Check for dry-run mode (after scanning/compression so we can show file breakdown)

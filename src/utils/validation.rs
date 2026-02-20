@@ -484,7 +484,7 @@ fn validate_markdown_syntax(content: &str, errors: &mut Vec<ValidationError>) {
 
     // Check for unclosed code blocks
     let triple_backtick_count = content.matches("```").count();
-    if triple_backtick_count % 2 != 0 {
+    if !triple_backtick_count.is_multiple_of(2) {
         errors.push(ValidationError {
             layer: ValidationLayer::Syntax,
             message: "Unclosed code block (odd number of ``` delimiters)".to_string(),
@@ -625,10 +625,10 @@ fn extract_conventions(content: &str) -> ExtractedConventions {
     }
 
     // Indent width
-    if let Some(cap) = INDENT_WIDTH_RE.captures(content) {
-        if let Ok(width) = cap[1].parse::<u32>() {
-            conventions.indent_width = Some(width);
-        }
+    if let Some(cap) = INDENT_WIDTH_RE.captures(content)
+        && let Ok(width) = cap[1].parse::<u32>()
+    {
+        conventions.indent_width = Some(width);
     }
 
     // Naming conventions
@@ -642,12 +642,11 @@ fn extract_conventions(content: &str) -> ExtractedConventions {
     }
 
     // Line length
-    if let Some(cap) = LINE_LENGTH_RE.captures(content) {
-        if let Ok(length) = cap[1].parse::<u32>() {
-            if (40..=500).contains(&length) {
-                conventions.line_length = Some(length);
-            }
-        }
+    if let Some(cap) = LINE_LENGTH_RE.captures(content)
+        && let Ok(length) = cap[1].parse::<u32>()
+        && (40..=500).contains(&length)
+    {
+        conventions.line_length = Some(length);
     }
 
     // Semicolons

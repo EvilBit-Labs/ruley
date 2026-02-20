@@ -15,7 +15,7 @@ Tame your unruly codebase. Make it _ruley_.
 ## Features
 
 - **Single binary distribution** -- No runtime dependencies (Node.js, Python, etc.)
-- **Multi-provider LLM support** -- Choose your preferred AI backend (7 providers)
+- **Multi-provider LLM support** -- Choose your preferred AI backend
 - **Multi-format output** -- Generate rules for 7 different AI IDE formats in a single run
 - **Native performance** -- Fast codebase analysis built with Rust
 - **Smart compression** -- Tree-sitter-based code compression for token efficiency (~70% reduction)
@@ -37,15 +37,12 @@ Tame your unruly codebase. Make it _ruley_.
 
 ## Supported Providers
 
-| Provider          | Environment Variable   |
-| ----------------- | ---------------------- |
-| **Anthropic**     | `ANTHROPIC_API_KEY`    |
-| **OpenAI**        | `OPENAI_API_KEY`       |
-| **Ollama**        | (local, no key needed) |
-| **OpenRouter**    | `OPENROUTER_API_KEY`   |
-| **xAI**           | `XAI_API_KEY`          |
-| **Groq**          | `GROQ_API_KEY`         |
-| **Google Gemini** | `GEMINI_API_KEY`       |
+| Provider       | Environment Variable   |
+| -------------- | ---------------------- |
+| **Anthropic**  | `ANTHROPIC_API_KEY`    |
+| **OpenAI**     | `OPENAI_API_KEY`       |
+| **Ollama**     | (local, no key needed) |
+| **OpenRouter** | `OPENROUTER_API_KEY`   |
 
 ## Installation
 

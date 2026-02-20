@@ -1,6 +1,6 @@
 # Commit Message Style for ruley
 
-- **Conventional Commits**: All commits must follow [Conventional Commits](https://www.conventionalcommits.org): `<type>(<scope>): <description>`
+- **Conventional Commits**: All commits must follow [Conventional Commits](https://www.conventionalcommits.org): `<type>[(<scope>)]: <description>`
 - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
 - **Scopes**: `(cli)`, `(packer)`, `(llm)`, `(generator)`, `(output)`, `(utils)`, `(config)`, `(deps)`, etc. Scope is recommended but not required.
 - **Description**:

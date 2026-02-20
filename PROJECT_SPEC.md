@@ -2,7 +2,7 @@
 
 > Make your codebase ruley. A Rust CLI tool for generating AI IDE rules from codebases.
 
-**Version:** 1.0.0 **License:** Apache-2.0 **Status:** Released **Crate:** `ruley` **Repository:** `github.com/EvilBit-Labs/ruley`
+**Version:** 1.0.0 **License:** Apache-2.0 **Status:** Pre-release **Crate:** `ruley` **Repository:** `github.com/EvilBit-Labs/ruley`
 
 ---
 
@@ -1419,7 +1419,7 @@ jobs:
 
 - [x] CLAUDE.md output format for Claude Code
 - [x] All 7 output formats: Cursor, Claude, Copilot, Windsurf, Aider, Generic, JSON
-- [x] Multi-provider LLM support (Anthropic, OpenAI, Ollama, OpenRouter, xAI, Groq, Gemini)
+- [x] Multi-provider LLM support (Anthropic, OpenAI, Ollama, OpenRouter)
 - [x] Tree-sitter compression (TypeScript, Python, Rust, Go)
 - [x] Progress bars, cost estimation, and error messages
 - [x] Caching and state management

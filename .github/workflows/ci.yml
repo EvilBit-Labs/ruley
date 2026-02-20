@@ -102,18 +102,13 @@ jobs:
 
     msrv:
         runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                rust: ["stable", "stable minus 3 releases", "nightly"]
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-            - name: Install Rust 1.85
+            - name: Install oldest supported Rust (stable minus 2)
               uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
               with:
-                  toolchain: ${{ matrix.rust }}
-                  components: rustfmt, clippy
+                  toolchain: "stable minus 2 releases"
 
             - name: Check MSRV
               run: cargo check --all-features

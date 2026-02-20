@@ -28,8 +28,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-            - uses: dtolnay/rust-toolchain@0dd4a6d07aedb0ef7f65e79f3e229a6c102ae2e0 # 1.91.0
+            - uses: dtolnay/rust-toolchain@master
               with:
+                  toolchain: 1.93.1
                   components: rustfmt, clippy
             - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
               with:
@@ -51,10 +52,10 @@ jobs:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Run tests (all features)
-              run: cargo nextest run --all-features
+              run: mise exec -- cargo nextest run --all-features
 
             - name: Build release
-              run: cargo build --release --all-features
+              run: mise exec -- cargo build --release --all-features
 
     test-cross-platform:
         strategy:
@@ -77,8 +78,8 @@ jobs:
                   cache: true
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
-            - run: cargo nextest run --all-features
-            - run: cargo build --release --all-features
+            - run: mise exec -- cargo nextest run --all-features
+            - run: mise exec -- cargo build --release --all-features
 
     features:
         runs-on: ubuntu-latest
@@ -108,7 +109,7 @@ jobs:
               uses: dtolnay/rust-toolchain@ff9b7e97f1c15b93257ad9a20e43c84dc3eef47b # 1.85.0
 
             - name: Check MSRV
-              run: cargo check --all-features
+              run: mise exec -- cargo check --all-features
 
     coverage:
         runs-on: ubuntu-latest
@@ -122,10 +123,10 @@ jobs:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Generate coverage
-              run: cargo llvm-cov --all-features --no-report
+              run: mise exec -- cargo llvm-cov --all-features --no-report
 
             - name: Combine coverage reports
-              run: cargo llvm-cov report --lcov --output-path lcov.info
+              run: mise exec -- cargo llvm-cov report --lcov --output-path lcov.info
 
             - name: Upload to Codecov
               uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2

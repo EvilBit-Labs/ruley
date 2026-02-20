@@ -1,12 +1,58 @@
 [book]
-title = "ruley"
-authors = ["EvilBit Labs"]
-language = "en"
-src = "src"
+authors     = ["EvilBit Labs"]
+language    = "en"
+src         = "src"
+title       = "ruley User Guide"
+description = "ruley User Guide - Generate AI IDE rules from your codebase"
 
 [build]
-build-dir = "book"
+build-dir      = "book"
+create-missing = true
+
+[preprocessor.links]
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[preprocessor.toc]
+command  = "mdbook-toc"
+marker   = "[TOC]"
+renderer = ["html"]
+
+[preprocessor.tabs]
+command = "mdbook-tabs"
 
 [output.html]
-git-repository-url = "https://github.com/EvilBit-Labs/ruley"
-edit-url-template = "https://github.com/EvilBit-Labs/ruley/edit/main/docs/{path}"
+default-theme        = "navy"
+preferred-dark-theme = "navy"
+git-repository-url   = "https://github.com/EvilBit-Labs/ruley"
+edit-url-template    = "https://github.com/EvilBit-Labs/ruley/edit/main/docs/{path}"
+smart-punctuation    = true
+mathjax-support      = false
+additional-css       = ["whichlang.css"]
+additional-js        = ["mermaid-init.js", "whichlang.js", "mermaid.min.js"]
+hash-files           = true
+
+[output.html.playground]
+editable = false
+copyable = true
+copy-js  = true
+
+[output.html.search]
+enable              = true
+limit-results       = 30
+teaser-word-count   = 30
+use-boolean-and     = true
+boost-title         = 2
+boost-hierarchy     = 1
+boost-paragraph     = 1
+expand              = true
+heading-split-level = 3
+
+[output.html.fold]
+enable = true
+level  = 1
+
+[output.html.print]
+enable     = true
+page-break = true

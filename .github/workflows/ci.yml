@@ -105,14 +105,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                rust:
-                    [
-                        "stable",
-                        "stable minus 1 release",
-                        "stable minus 2 releases",
-                        "stable minus 3 releases",
-                        "nightly",
-                    ]
+                rust: ["stable", "stable minus 3 releases", "nightly"]
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 

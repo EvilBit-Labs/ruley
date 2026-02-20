@@ -118,16 +118,17 @@ pub fn display_success_summary(
     )?;
 
     // Compression (if applicable)
-    if let Some(ratio) = compression_ratio {
-        if ratio < 1.0 && ratio > 0.0 {
-            let percent = ((1.0 - ratio) * 100.0) as u32;
-            writeln!(
-                term,
-                "{} Compression: {}% reduction",
-                style("\u{251c}\u{2500}").dim(),
-                percent
-            )?;
-        }
+    if let Some(ratio) = compression_ratio
+        && ratio < 1.0
+        && ratio > 0.0
+    {
+        let percent = ((1.0 - ratio) * 100.0) as u32;
+        writeln!(
+            term,
+            "{} Compression: {}% reduction",
+            style("\u{251c}\u{2500}").dim(),
+            percent
+        )?;
     }
 
     // Actual cost

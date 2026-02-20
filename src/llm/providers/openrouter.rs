@@ -303,20 +303,20 @@ impl LLMProvider for OpenRouterProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             // Try to parse structured error response
-            if let Ok(error) = serde_json::from_str::<OpenRouterError>(&error_text) {
-                if let Some(detail) = error.error {
-                    let error_type = detail
-                        .error_type
-                        .or(detail.code)
-                        .unwrap_or_else(|| "unknown".to_string());
-                    let message = detail
-                        .message
-                        .unwrap_or_else(|| "Unknown error".to_string());
-                    return Err(RuleyError::Provider {
-                        provider: "openrouter".to_string(),
-                        message: format!("{}: {}", error_type, message),
-                    });
-                }
+            if let Ok(error) = serde_json::from_str::<OpenRouterError>(&error_text)
+                && let Some(detail) = error.error
+            {
+                let error_type = detail
+                    .error_type
+                    .or(detail.code)
+                    .unwrap_or_else(|| "unknown".to_string());
+                let message = detail
+                    .message
+                    .unwrap_or_else(|| "Unknown error".to_string());
+                return Err(RuleyError::Provider {
+                    provider: "openrouter".to_string(),
+                    message: format!("{}: {}", error_type, message),
+                });
             }
 
             return Err(RuleyError::Provider {

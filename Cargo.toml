@@ -9,7 +9,7 @@ repository   = "https://github.com/EvilBit-Labs/ruley"
 homepage     = "https://github.com/EvilBit-Labs/ruley"
 keywords     = ["ai", "llm", "cursor", "claude", "copilot", "ide", "rules"]
 categories   = ["command-line-utilities", "development-tools"]
-rust-version = "1.85"
+rust-version = "1.91"
 
 [workspace.lints.clippy]
 # Pedantic clippy configuration with proper priorities

@@ -19,11 +19,15 @@ jobs:
               with:
                   fetch-depth: 0
                   persist-credentials: true
+            - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+              with:
+                  toolchain: "1.93.1"
+                  components: rustfmt, clippy
             - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
               with:
                   install: true
             - name: Run release-plz
-              uses: release-plz/action@52440b50d383aa252927de395c8b2c1e0a9cf8e9 # v0.5
+              uses: release-plz/action@f708778669256143d984cce4b23592637532e040 # v0.5
               with:
                   command: release
               env:
@@ -45,11 +49,15 @@ jobs:
               with:
                   fetch-depth: 0
                   persist-credentials: false
+            - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+              with:
+                  toolchain: "1.93.1"
+                  components: rustfmt, clippy
             - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
               with:
                   install: true
             - name: Run release-plz
-              uses: release-plz/action@52440b50d383aa252927de395c8b2c1e0a9cf8e9 # v0.5
+              uses: release-plz/action@f708778669256143d984cce4b23592637532e040 # v0.5
               with:
                   command: release-pr
               env:

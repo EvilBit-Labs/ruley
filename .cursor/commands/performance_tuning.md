@@ -50,7 +50,7 @@ Scope: diff-only | Gates: `just lint` + tests must pass | No commits | No public
 
 ## REPO RULES (REINFORCED)
 
-Zero warnings | No unsafe | Precise typing | Async I/O only | Trait boundaries | thiserror+anyhow | SQL AST validation | CLI-first | Memory efficiency | redb-only | Path canonicalization | No binary blobs | rustdoc for public APIs
+Zero warnings | No unsafe | Precise typing | Async I/O only | Trait-based providers | thiserror+anyhow | CLI-first | Memory efficiency | rustdoc for public APIs
 
 ## EXECUTION CHECKLIST
 
@@ -74,7 +74,7 @@ Ambiguous? Defer and document.
 
 ## Completion Checklist
 
-- [ ] Code conforms to DaemonEye project rules and security standards (AGENTS.md)
+- [ ] Code conforms to ruley project rules and standards (AGENTS.md)
 - [ ] Tests pass (`just test`)
 - [ ] Linting is clean (`just lint`)
 - [ ] Full CI validation passes (`just ci-check`)

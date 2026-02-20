@@ -27,34 +27,22 @@ jobs:
             - name: Checkout
               uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-            - name: Setup Rust
-              uses: dtolnay/rust-toolchain@0dd4a6d07aedb0ef7f65e79f3e229a6c102ae2e0 # 1.91.0
+            - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
               with:
+                  toolchain: "1.93.1"
                   components: rustfmt, clippy
-
-            - name: Setup mdBook
-              uses: jontze/action-mdbook@6c0be56d14c4bf16861b00af61f50ff7400ce502 # v4.0.0
+            - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
               with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  mdbook-version: 0.5.2
-                  use-mermaid: true
-                  use-toc: true
-                  use-admonish: true
-
-            - name: Install cargo-binstall
-              uses: cargo-bins/cargo-binstall@7691a5b29cda4f5499b819e5618012ba4b6c3334 # main
-
-            - name: Install mdbook plugins
-              run: cargo binstall mdbook-tabs mdbook-i18n-helpers mdbook-yml-header mdbook-image-size --no-confirm
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Build mdBook
-              run: |
-                  cd docs
-                  mdbook build
+              run: just docs-build
 
             - name: Build rustdoc
               run: |
-                  cargo doc --no-deps --document-private-items
+                  just doc-build
                   mkdir -p docs/book/api
                   cp -r target/doc/* docs/book/api/
 

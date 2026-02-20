@@ -278,26 +278,22 @@ fn detect_existing_rules(
         && !formats_being_generated
             .iter()
             .any(|f| f.to_lowercase() == "cursor")
+        && let Ok(entries) = std::fs::read_dir(&cursor_rules_dir)
     {
-        if let Ok(entries) = std::fs::read_dir(&cursor_rules_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|ext| ext == "mdc") {
-                    match std::fs::read_to_string(&path) {
-                        Ok(content) => {
-                            let relative = path
-                                .strip_prefix(project_path)
-                                .unwrap_or(&path)
-                                .to_string_lossy()
-                                .to_string();
-                            existing.insert(relative, content);
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                "Failed to read cursor rule file '{}': {e}",
-                                path.display()
-                            );
-                        }
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "mdc") {
+                match std::fs::read_to_string(&path) {
+                    Ok(content) => {
+                        let relative = path
+                            .strip_prefix(project_path)
+                            .unwrap_or(&path)
+                            .to_string_lossy()
+                            .to_string();
+                        existing.insert(relative, content);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to read cursor rule file '{}': {e}", path.display());
                     }
                 }
             }

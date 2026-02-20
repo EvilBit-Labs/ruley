@@ -6,11 +6,11 @@ Analyze diff for code quality issues and apply safe improvements while preservin
 
 ## Focus Categories
 
-Analyze only the changed files (diff scope) and improve them while preserving public APIs. Focus categories: (1) Code Smells (large/duplicate/complex) (2) Design Patterns (traits, builder, newtype, factory) (3) Best Practices (Rust 2024, project conventions) (4) Readability (naming, structure, cohesion) (5) Maintainability (modularization, clarity) (6) Performance (async, redb I/O, allocation, blocking) (7) Type Safety (strong types, avoid needless Option/Result layering) (8) Error Handling (thiserror + anyhow context, no silent failures). Context: DaemonEye = security-first, airgapped, zero-warnings, privilege separation, CLI-first, memory conscious. Prefer clear + secure over clever.
+Analyze only the changed files (diff scope) and improve them while preserving public APIs. Focus categories: (1) Code Smells (large/duplicate/complex) (2) Design Patterns (traits, builder, newtype, factory) (3) Best Practices (Rust 2024, project conventions) (4) Readability (naming, structure, cohesion) (5) Maintainability (modularization, clarity) (6) Performance (async, allocation, blocking) (7) Type Safety (strong types, avoid needless Option/Result layering) (8) Error Handling (thiserror + anyhow context, no silent failures). Context: ruley = Rust CLI for AI IDE rule generation, zero-warnings, trait-based providers, async-first, token-efficient. Prefer clear + correct over clever.
 
 ## Steps
 
-1. Collect diff file list. 2. Analyze per focus category. 3. Classify each finding: `safe-edit` (apply now), `deferred`, `requires-approval`. 4. Auto-apply only `safe-edit` (mechanical, internal, non-breaking, warning removal, correctness, logging consistency, blocking I/O → async). 5. Run `just lint` then `just test`. On failure: isolate failing hunk, revert it, re-run, document skip. 6. Generate report (summary table, applied edits + rationale, deferred backlog, approval-needed with risks, next-step roadmap). 7. Output unified diff (never commit). If zero safe edits: state "No safe automatic edits applied" and still output full report.
+1. Collect diff file list. 2. Analyze per focus category. 3. Classify each finding: `safe-edit` (apply now), `deferred`, `requires-approval`. 4. Auto-apply only `safe-edit` (mechanical, internal, non-breaking, warning removal, correctness, logging consistency, blocking I/O -> async). 5. Run `just lint` then `just test`. On failure: isolate failing hunk, revert it, re-run, document skip. 6. Generate report (summary table, applied edits + rationale, deferred backlog, approval-needed with risks, next-step roadmap). 7. Output unified diff (never commit). If zero safe edits: state "No safe automatic edits applied" and still output full report.
 
 ## Auto-Edit Constraints (Strict)
 
@@ -24,13 +24,13 @@ Analyze only the changed files (diff scope) and improve them while preserving pu
 
 - Actionable suggestions (code examples when clearer)
 - Auto-apply only clearly safe internal fixes
-- Prioritize runtime correctness, safety, type rigor, security posture
+- Prioritize runtime correctness, safety, type rigor
 - Preserve all public APIs (no signature/visibility changes)
 - Avoid cleverness; optimize for clarity & maintainability
 
 ## Repo Rules (Reinforced)
 
-Zero warnings (clippy -D warnings) | No unsafe | Precise typing | Async I/O only | Trait-based services | `thiserror` + `anyhow` | SQL AST validation | CLI-first (`daemoneye-cli`) | Memory efficient | redb-only storage abstraction | Path canonicalization + root safety | No binary blobs in DB | rustdoc for all public APIs
+Zero warnings (clippy -D warnings) | No unsafe | Precise typing | Async I/O only | Trait-based providers | `thiserror` + `anyhow` | CLI-first | Memory efficient | rustdoc for all public APIs
 
 ---
 
@@ -55,7 +55,7 @@ If ambiguity arises, default to: classify (deferred) instead of applying.
 
 ## Completion Checklist
 
-- [ ] Code conforms to DaemonEye project rules and security standards (AGENTS.md)
+- [ ] Code conforms to ruley project rules and standards (AGENTS.md)
 - [ ] Tests pass (`just test`)
 - [ ] Linting is clean (`just lint`)
 - [ ] Full CI validation passes (`just ci-check`)

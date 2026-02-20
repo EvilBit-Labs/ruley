@@ -1,3 +1,7 @@
+[[tools.act]]
+version = "0.2.84"
+backend = "aqua:nektos/act"
+
 [[tools.actionlint]]
 version = "1.7.11"
 backend = "aqua:rhysd/actionlint"
@@ -29,7 +33,7 @@ version = "0.19.0"
 backend = "cargo:cargo-deny"
 
 [[tools."cargo:cargo-dist"]]
-version = "0.30.3"
+version = "0.30.4"
 backend = "cargo:cargo-dist"
 
 [[tools."cargo:cargo-llvm-cov"]]
@@ -41,7 +45,7 @@ version = "0.9.1"
 backend = "cargo:cargo-machete"
 
 [[tools."cargo:cargo-nextest"]]
-version = "0.9.127"
+version = "0.9.128"
 backend = "cargo:cargo-nextest"
 
 [[tools."cargo:cargo-outdated"]]
@@ -93,9 +97,9 @@ version = "0.3.156"
 backend = "cargo:release-plz"
 
 [[tools.claude-code]]
-version = "2.1.42"
+version = "2.1.47"
 backend = "aqua:anthropics/claude-code"
-"platforms.macos-arm64" = { checksum = "blake3:84140fdd428faf5e4dd3ce3d7dd32996dcda0dceac7572e17db3a760776ebd7d", url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.42/darwin-arm64/claude"}
+"platforms.macos-arm64" = { checksum = "blake3:ada0f49eefe910715db055bf2b4024505b374eeaccebd43b32abdff556956dbc", url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.47/darwin-arm64/claude"}
 
 [[tools.just]]
 version = "1.46.0"
@@ -130,7 +134,7 @@ version = "3.14.3"
 backend = "core:python"
 
 [[tools.rust]]
-version = "1.91.0"
+version = "1.93.1"
 backend = "core:rust"
 
 [[tools.scorecard]]

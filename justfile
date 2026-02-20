@@ -124,9 +124,9 @@ audit:
 deny:
     @{{ mise_exec }} cargo deny check
 
-# Check for outdated dependencies
+# Check for outdated dependencies (fails in CI if any found)
 outdated:
-    @{{ mise_exec }} cargo outdated --depth=1
+    @{{ mise_exec }} cargo outdated --depth=1 --exit-code=1
 
 # ==============================================================================
 # Distribution
@@ -187,6 +187,31 @@ docs-build:
 [unix]
 docs-serve:
     cd docs && {{ mise_exec }} mdbook serve --open
+
+# ==============================================================================
+# CI Simulation (act dry-runs)
+# ==============================================================================
+
+# Dry-run all GitHub Actions workflows locally with act
+ci-dry-run: ci-dry-run-ci ci-dry-run-docs
+
+# Dry-run CI workflow (all jobs)
+ci-dry-run-ci:
+    @echo "=== CI workflow ==="
+    @act --workflows .github/workflows/ci.yml --container-architecture linux/amd64 -n 2>&1 | grep -E '(Job|⭐|✅|❌|🏁)' || true
+
+# Dry-run docs workflow
+ci-dry-run-docs:
+    @echo "=== Docs workflow ==="
+    @act -j build --workflows .github/workflows/docs.yml --container-architecture linux/amd64 -n 2>&1 | grep -E '(Job|⭐|✅|❌|🏁)' || true
+
+# Dry-run a specific workflow (e.g., just ci-dry-run-workflow ci.yml)
+ci-dry-run-workflow workflow:
+    @act --workflows .github/workflows/{{ workflow }} --container-architecture linux/amd64 -n
+
+# Dry-run a specific job (e.g., just ci-dry-run-job ci.yml quality)
+ci-dry-run-job workflow job:
+    @act -j {{ job }} --workflows .github/workflows/{{ workflow }} --container-architecture linux/amd64 -n
 
 # ==============================================================================
 # Development

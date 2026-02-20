@@ -17,7 +17,7 @@ Use CodeRabbit to identify issues and follow its recommendations in the current 
 
 ## Completion Checklist
 
-- [ ] Code conforms to DaemonEye project rules and security standards (AGENTS.md)
+- [ ] Code conforms to ruley project rules and standards (AGENTS.md)
 - [ ] Tests pass (`just test`)
 - [ ] Linting is clean (`just lint`)
 - [ ] Full CI validation passes (`just ci-check`)

@@ -105,9 +105,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.101"
+version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "arraydeque"
@@ -429,9 +429,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.58"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63be97961acde393029492ce0be7a1af7e323e6bae9511ebfac33751be5e6806"
+checksum = "2797f34da339ce31042b27d23607e051786132987f595b02ba4f6a6dffb7030a"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -439,9 +439,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.58"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f13174bda5dfd69d7e947827e5af4b0f2f94a4a3ee92912fba07a66150f21e2"
+checksum = "24a241312cea5059b13574bb9b3861cabf758b879c15190b37b6d6fd63ab6876"
 dependencies = [
  "anstream",
  "anstyle",
@@ -508,7 +508,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -553,7 +553,7 @@ dependencies = [
  "serde-untagged",
  "serde_core",
  "serde_json",
- "toml 0.9.11+spec-1.1.0",
+ "toml",
  "winnow",
  "yaml-rust2",
 ]
@@ -933,7 +933,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1199,7 +1199,7 @@ dependencies = [
  "thiserror 2.0.18",
  "time",
  "tokio",
- "toml 0.9.11+spec-1.1.0",
+ "toml",
  "url",
  "urlencoding",
 ]
@@ -1774,7 +1774,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2512,7 +2512,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2822,7 +2822,6 @@ dependencies = [
  "criterion",
  "dialoguer",
  "dirs",
- "futures",
  "git-cliff",
  "git2",
  "globset",
@@ -2830,7 +2829,6 @@ dependencies = [
  "indicatif",
  "insta",
  "mockito",
- "once_cell",
  "quick-xml",
  "regex",
  "reqwest 0.13.2",
@@ -2840,7 +2838,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tiktoken-rs",
  "tokio",
- "toml 1.0.2+spec-1.1.0",
+ "toml",
  "tracing",
  "tracing-subscriber",
  "tree-sitter",
@@ -2918,7 +2916,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2977,7 +2975,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3402,7 +3400,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3656,22 +3654,7 @@ dependencies = [
  "indexmap",
  "serde_core",
  "serde_spanned",
- "toml_datetime 0.7.5+spec-1.1.0",
- "toml_parser",
- "toml_writer",
- "winnow",
-]
-
-[[package]]
-name = "toml"
-version = "1.0.2+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1dfefef6a142e93f346b64c160934eb13b5594b84ab378133ac6815cb2bd57f"
-dependencies = [
- "indexmap",
- "serde_core",
- "serde_spanned",
- "toml_datetime 1.0.0+spec-1.1.0",
+ "toml_datetime",
  "toml_parser",
  "toml_writer",
  "winnow",
@@ -3682,15 +3665,6 @@ name = "toml_datetime"
 version = "0.7.5+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92e1cfed4a3038bc5a127e35a2d360f145e1f4b971b551a2ba5fd7aedf7e1347"
-dependencies = [
- "serde_core",
-]
-
-[[package]]
-name = "toml_datetime"
-version = "1.0.0+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32c2555c699578a4f59f0cc68e5116c8d7cabbd45e1409b989d4be085b53f13e"
 dependencies = [
  "serde_core",
 ]
@@ -4240,7 +4214,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

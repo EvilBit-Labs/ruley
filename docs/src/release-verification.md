@@ -28,7 +28,7 @@ Each release includes SHA256 checksums for all platform binaries. These are atta
 
 ### Verifying Checksums
 
-{{#tabs }} {{#tab name="macOS / Linux" }}
+**macOS / Linux**
 
 ```bash
 # Download the checksum file
@@ -38,14 +38,12 @@ curl -fsSLO https://github.com/EvilBit-Labs/ruley/releases/latest/download/sha25
 sha256sum -c sha256sums.txt --ignore-missing
 ```
 
-{{#endtab }} {{#tab name="Windows" }}
+**Windows**
 
 ```powershell
 # Compute the hash of the downloaded archive
 Get-FileHash ruley-x86_64-pc-windows-msvc.zip -Algorithm SHA256
 ```
-
-{{#endtab }} {{#endtabs }}
 
 ## crates.io Verification
 

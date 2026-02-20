@@ -11,32 +11,30 @@ This guide walks you through generating your first set of AI IDE rules with rule
 
 Set the environment variable for your chosen provider:
 
-{{#tabs }} {{#tab name="Anthropic" }}
+**Anthropic**
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-{{#endtab }} {{#tab name="OpenAI" }}
+**OpenAI**
 
 ```bash
 export OPENAI_API_KEY="sk-..."
 ```
 
-{{#endtab }} {{#tab name="Ollama" }}
+**Ollama**
 
 ```bash
 # No API key needed -- just ensure Ollama is running
 ollama serve
 ```
 
-{{#endtab }} {{#tab name="OpenRouter" }}
+**OpenRouter**
 
 ```bash
 export OPENROUTER_API_KEY="sk-or-..."
 ```
-
-{{#endtab }} {{#endtabs }}
 
 ## Step 2: Generate Rules
 

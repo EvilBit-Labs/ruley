@@ -19,9 +19,6 @@ command  = "mdbook-toc"
 marker   = "[TOC]"
 renderer = ["html"]
 
-[preprocessor.tabs]
-command = "mdbook-tabs"
-
 [output.html]
 default-theme        = "navy"
 preferred-dark-theme = "navy"

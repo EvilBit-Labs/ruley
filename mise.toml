@@ -31,3 +31,4 @@ pre-commit                  = "latest"
 scorecard                   = "5.4.0"
 "cargo:release-plz"         = "0.3.156"
 claude-code                 = { version = "latest", os = ["linux", "macos"] }
+act = "0.2.84"

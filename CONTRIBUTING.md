@@ -8,6 +8,7 @@ Thank you for your interest in contributing to ruley! This document provides gui
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
 - [Project Architecture](#project-architecture)
+- [Environment Variables](#environment-variables)
 - [Making Changes](#making-changes)
 - [Testing](#testing)
 - [Documentation](#documentation)
@@ -35,17 +36,17 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 git clone https://github.com/EvilBit-Labs/ruley.git
 cd ruley
 
-# Install development tools (if using mise)
-mise install
+# Install development tools (mise handles everything via mise.toml)
+just setup
 
 # Build the project
-cargo build
+just build
 
 # Run tests
-cargo test --all-features
+just test
 
 # Run the CLI
-cargo run -- --help
+just run --help
 ```
 
 ## Development Setup
@@ -60,29 +61,33 @@ cargo run -- --help
 ### Development Commands
 
 ```bash
-# Using Just (recommended)
-just test         # Run tests
-just lint         # Run rustfmt check + clippy
-just check        # Run cargo check
-just ci-check     # Run comprehensive CI checks
-just build        # Build the project
-
-# Using Cargo directly
-cargo test --all-features
-cargo clippy --all-targets --all-features -- -D warnings
-cargo fmt --check
-cargo build --release
+# Using Just (recommended) — run `just` to see all available recipes
+just test            # Run tests with nextest (all features)
+just lint            # Run rustfmt check + clippy (all features)
+just clippy-min      # Run clippy with no default features
+just check           # Quick check: pre-commit + lint + build-check
+just ci-check        # Full CI suite: lint, test, build, audit, coverage
+just build           # Debug build
+just build-release   # Release build (all features, LTO)
+just fmt             # Format code
+just coverage        # Generate LCOV coverage report
+just audit           # Run cargo audit
+just deny            # Run cargo deny checks
+just outdated        # Check for outdated dependencies
+just doc             # Generate and open rustdoc
+just docs-serve      # Serve mdbook docs locally with live reload
+just run <args>      # Run the CLI with arguments
+just changelog       # Generate CHANGELOG.md from git history
 ```
 
 ### Building Documentation
 
 ```bash
-# Build and serve the mdbook documentation
-cd docs
-mdbook serve --open
+# Serve mdbook documentation locally
+just docs-serve
 
 # Generate rustdoc
-cargo doc --open
+just doc
 ```
 
 ## Project Architecture
@@ -99,6 +104,37 @@ ruley is a single-crate Rust CLI tool. See [AGENTS.md](AGENTS.md) for comprehens
 | `generator/` | Rule generation logic and prompt templates                       |
 | `output/`    | Multi-format output formatters (Cursor, Claude, Copilot, etc.)   |
 | `utils/`     | Shared utilities (error types, progress bars, formatting)        |
+
+## Environment Variables
+
+### Provider API Keys
+
+| Variable             | Provider   | Required                                     |
+| -------------------- | ---------- | -------------------------------------------- |
+| `ANTHROPIC_API_KEY`  | Anthropic  | When using `--provider anthropic`            |
+| `OPENAI_API_KEY`     | OpenAI     | When using `--provider openai`               |
+| `OLLAMA_HOST`        | Ollama     | Optional (default: `http://localhost:11434`) |
+| `OPENROUTER_API_KEY` | OpenRouter | When using `--provider openrouter`           |
+
+### CLI Configuration Overrides
+
+All CLI flags can be set via `RULEY_*` environment variables. CLI flags take precedence over environment variables.
+
+| Variable             | CLI Flag         | Description                    |
+| -------------------- | ---------------- | ------------------------------ |
+| `RULEY_PROVIDER`     | `--provider`     | LLM provider                   |
+| `RULEY_MODEL`        | `--model`        | Model name                     |
+| `RULEY_FORMAT`       | `--format`       | Output format(s)               |
+| `RULEY_OUTPUT`       | `--output`       | Output file path               |
+| `RULEY_CONFIG`       | `--config`       | Config file path               |
+| `RULEY_COMPRESS`     | `--compress`     | Enable tree-sitter compression |
+| `RULEY_CHUNK_SIZE`   | `--chunk-size`   | Token chunk size               |
+| `RULEY_NO_CONFIRM`   | `--no-confirm`   | Skip cost confirmation         |
+| `RULEY_DRY_RUN`      | `--dry-run`      | Show plan without calling LLM  |
+| `RULEY_DESCRIPTION`  | `--description`  | Rule description               |
+| `RULEY_RULE_TYPE`    | `--rule-type`    | Rule type                      |
+| `RULEY_ON_CONFLICT`  | `--on-conflict`  | Conflict resolution strategy   |
+| `RULEY_REPOMIX_FILE` | `--repomix-file` | Pre-packed repomix file        |
 
 ## Making Changes
 
@@ -127,9 +163,10 @@ ruley is a single-crate Rust CLI tool. See [AGENTS.md](AGENTS.md) for comprehens
 Follow [Conventional Commits](https://www.conventionalcommits.org):
 
 ```text
-<type>(<scope>): <description>
+<type>[(<scope>)]: <description>
 ```
 
+- **Scope** (optional but recommended): `cli`, `packer`, `llm`, `generator`, `output`, `utils`, `config`, `deps`, etc.
 - **Description**: imperative mood ("add", not "added"), no period, \<=72 characters
 - **Body** (optional): explain what/why, not how
 - **Footer** (optional): `Closes #123` or `BREAKING CHANGE:`
@@ -145,10 +182,11 @@ Examples:
 
 Before submitting changes, ensure:
 
-1. **All tests pass**: `cargo test --all-features`
-2. **No clippy warnings**: `cargo clippy --all-targets --all-features -- -D warnings`
-3. **Code is formatted**: `cargo fmt`
-4. **Documentation builds**: `cargo doc --no-deps`
+1. **All tests pass**: `just test`
+2. **No clippy warnings**: `just clippy` (all features) and `just clippy-min` (no default features)
+3. **Code is formatted**: `just fmt`
+4. **Documentation builds**: `just doc-build`
+5. **Full CI suite passes**: `just ci-check`
 
 ### Safety Requirements
 
@@ -165,17 +203,20 @@ Tests may use `#[allow(unsafe_code)]` where necessary (e.g., environment variabl
 ### Running Tests
 
 ```bash
-# Run all tests
-cargo test --all-features
+# Run all tests (uses cargo-nextest)
+just test
 
 # Run tests with output
-cargo test --all-features -- --nocapture
+just test-verbose
 
-# Run a specific test
+# Run a specific test (using cargo directly)
 cargo test test_name
 
 # Run tests for a specific module
 cargo test packer::
+
+# Generate coverage report
+just coverage
 ```
 
 ### Writing Tests
@@ -208,9 +249,10 @@ cargo test packer::
 
 1. **Update documentation** for any API changes
 2. **Add tests** for new functionality
-3. **Run the full check suite** locally: `just ci-check`
-4. **Create a pull request** with a clear description
-5. **Address review feedback** promptly
+3. **Run the full check suite** locally: `just ci-check` (must be completely green)
+4. **Sign off commits** with `git commit -s` (DCO required)
+5. **Create a pull request** with a clear description
+6. **Address review feedback** promptly
 
 ### Code Review Requirements
 

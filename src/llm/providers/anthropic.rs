@@ -106,10 +106,10 @@ impl AnthropicProvider {
     /// Construct the system prompt from the first message if it has role "system".
     /// Anthropic requires system prompts to be passed separately from messages.
     fn extract_system_prompt(messages: &[Message]) -> (Option<&str>, &[Message]) {
-        if let Some(first) = messages.first() {
-            if first.role == "system" {
-                return (Some(&first.content), &messages[1..]);
-            }
+        if let Some(first) = messages.first()
+            && first.role == "system"
+        {
+            return (Some(&first.content), &messages[1..]);
         }
         (None, messages)
     }

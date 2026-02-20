@@ -4,7 +4,7 @@ This document describes the process for creating a new release of ruley.
 
 ## Overview
 
-Releases are automated via GitHub Actions. Pushing a version tag (e.g., `v1.0.0`) triggers the release workflow, which builds binaries for all supported platforms, generates a changelog, creates a GitHub release, and publishes to crates.io.
+Releases are automated via [cargo-dist](https://opensource.axo.dev/cargo-dist/) and GitHub Actions. Pushing a version tag (e.g., `v1.0.0`) triggers the release workflow, which builds binaries for all supported platforms, generates a changelog, creates a GitHub release, publishes to crates.io, and updates the Homebrew tap. Configuration lives in `dist-workspace.toml`.
 
 ## Pre-Release Checklist
 

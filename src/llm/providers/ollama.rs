@@ -257,16 +257,16 @@ impl LLMProvider for OllamaProvider {
             }
 
             // Try to parse structured error
-            if let Ok(error) = serde_json::from_str::<OllamaError>(&error_text) {
-                if let Some(detail) = error.error {
-                    let msg = detail
-                        .message
-                        .unwrap_or_else(|| "Unknown error".to_string());
-                    return Err(RuleyError::Provider {
-                        provider: "ollama".to_string(),
-                        message: msg,
-                    });
-                }
+            if let Ok(error) = serde_json::from_str::<OllamaError>(&error_text)
+                && let Some(detail) = error.error
+            {
+                let msg = detail
+                    .message
+                    .unwrap_or_else(|| "Unknown error".to_string());
+                return Err(RuleyError::Provider {
+                    provider: "ollama".to_string(),
+                    message: msg,
+                });
             }
 
             return Err(RuleyError::Provider {

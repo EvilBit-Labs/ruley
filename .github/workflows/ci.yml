@@ -134,29 +134,3 @@ jobs:
                   fail_ci_if_error: false
                   token: ${{ secrets.CODECOV_TOKEN }}
                   slug: EvilBit-Labs/ruley
-
-    ci-success:
-        name: CI Success
-        runs-on: ubuntu-latest
-        needs: [quality, test, test-cross-platform, features, msrv, coverage]
-        if: always()
-        steps:
-            - name: Check all jobs passed
-              env:
-                  QUALITY_RESULT: ${{ needs.quality.result }}
-                  TEST_RESULT: ${{ needs.test.result }}
-                  CROSS_PLATFORM_RESULT: ${{ needs.test-cross-platform.result }}
-                  FEATURES_RESULT: ${{ needs.features.result }}
-                  MSRV_RESULT: ${{ needs.msrv.result }}
-                  COVERAGE_RESULT: ${{ needs.coverage.result }}
-              run: |
-                  if [[ "$QUALITY_RESULT" != "success" ]] ||
-                     [[ "$TEST_RESULT" != "success" ]] ||
-                     [[ "$CROSS_PLATFORM_RESULT" != "success" ]] ||
-                     [[ "$FEATURES_RESULT" != "success" ]] ||
-                     [[ "$MSRV_RESULT" != "success" ]] ||
-                     [[ "$COVERAGE_RESULT" != "success" ]]; then
-                    echo "One or more jobs failed"
-                    exit 1
-                  fi
-                  echo "All CI jobs passed!"

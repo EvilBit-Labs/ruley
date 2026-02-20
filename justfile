@@ -124,9 +124,9 @@ audit:
 deny:
     @{{ mise_exec }} cargo deny check
 
-# Check for outdated dependencies
+# Check for outdated dependencies (fails in CI if any found)
 outdated:
-    @{{ mise_exec }} cargo outdated --depth=1
+    @{{ mise_exec }} cargo outdated --depth=1 --exit-code=1
 
 # ==============================================================================
 # Distribution

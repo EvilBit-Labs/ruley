@@ -52,10 +52,10 @@ jobs:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Run tests (all features)
-              run: mise exec -- cargo nextest run --all-features
+              run: just test
 
             - name: Build release
-              run: mise exec -- cargo build --release --all-features
+              run: just build-release
 
     test-cross-platform:
         strategy:
@@ -78,8 +78,8 @@ jobs:
                   cache: true
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
-            - run: mise exec -- cargo nextest run --all-features
-            - run: mise exec -- cargo build --release --all-features
+            - run: just test
+            - run: just build-release
 
     features:
         runs-on: ubuntu-latest
@@ -98,7 +98,7 @@ jobs:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Check feature combination
-              run: cargo check ${{ matrix.features }}
+              run: mise exec -- cargo check ${{ matrix.features }}
 
     msrv:
         runs-on: ubuntu-latest
@@ -109,7 +109,7 @@ jobs:
               uses: dtolnay/rust-toolchain@ff9b7e97f1c15b93257ad9a20e43c84dc3eef47b # 1.85.0
 
             - name: Check MSRV
-              run: mise exec -- cargo check --all-features
+              run: cargo check --all-features
 
     coverage:
         runs-on: ubuntu-latest
@@ -123,10 +123,7 @@ jobs:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Generate coverage
-              run: mise exec -- cargo llvm-cov --all-features --no-report
-
-            - name: Combine coverage reports
-              run: mise exec -- cargo llvm-cov report --lcov --output-path lcov.info
+              run: just coverage
 
             - name: Upload to Codecov
               uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2

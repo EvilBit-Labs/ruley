@@ -171,7 +171,7 @@ ignore = "0.4.25"
 
 # Progress display
 indicatif = "0.18.4"
-quick-xml = "0.39.1"
+quick-xml = "0.39.2"
 regex     = "1.12.3"
 
 # LLM providers (feature-gated)

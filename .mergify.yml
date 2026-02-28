@@ -11,31 +11,12 @@ queue_rules:
       - check-success = coverage
 
 pull_request_rules:
-  # Tier 1: Maintainer PRs -- queue when maintainer adds 'lgtm' label
-  - name: Queue maintainer PRs with lgtm label
-    conditions:
-      - base = main
-      - "author=@maintainers"
-      - label = lgtm
-      - label != do-not-merge
-    actions:
-      queue:
-        name: default
-
-  # Tier 2: Trusted bot PRs -- auto-queue when checks pass
-  - name: Auto-queue release-plz PRs
-    conditions:
-      - base = main
-      - "head ~= ^release-plz-"
-      - label != do-not-merge
-    actions:
-      queue:
-        name: default
-
+  # Tier 1: Trusted bot PRs -- auto-approve and queue immediately
   - name: Auto-approve and queue dependabot PRs
     conditions:
       - base = main
       - author = dependabot[bot]
+      - -draft
       - label != do-not-merge
       - -files~=\.github/workflows/release\.yml
     actions:
@@ -45,13 +26,37 @@ pull_request_rules:
       queue:
         name: default
 
-  # Tier 3: All other PRs (external contributors, copilot) -- require maintainer approval
+  - name: Auto-queue release-plz PRs
+    conditions:
+      - base = main
+      - "head ~= ^release-plz-"
+      - -draft
+      - label != do-not-merge
+    actions:
+      queue:
+        name: default
+
+  # Tier 2: Maintainer PRs -- queue when maintainer self-labels 'lgtm'
+  # (no approval required; solves the sole-maintainer self-merge problem)
+  - name: Queue maintainer PRs with lgtm label
+    conditions:
+      - base = main
+      - "author=@maintainers"
+      - -draft
+      - label = lgtm
+      - label != do-not-merge
+    actions:
+      queue:
+        name: default
+
+  # Tier 3: External contributor PRs -- require maintainer approval
   - name: Queue external PRs when approved by maintainer
     conditions:
       - base = main
       - "-author=@maintainers"
       - author != dependabot[bot]
       - "-head ~= ^release-plz-"
+      - -draft
       - "approved-reviews-by=@maintainers"
       - label != do-not-merge
     actions:

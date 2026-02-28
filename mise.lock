@@ -5,16 +5,14 @@ backend = "aqua:nektos/act"
 [[tools.actionlint]]
 version = "1.7.11"
 backend = "aqua:rhysd/actionlint"
-"platforms.macos-arm64" = { checksum = "sha256:a21ba7366d8329e7223faee0ed69eb13da27fe8acabb356bb7eb0b7f1e1cb6d8", url = "https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_darwin_arm64.tar.gz"}
 
 [[tools.cargo-binstall]]
-version = "1.17.5"
+version = "1.17.6"
 backend = "aqua:cargo-bins/cargo-binstall"
 
 [[tools.cargo-insta]]
 version = "1.46.3"
 backend = "aqua:mitsuhiko/insta"
-"platforms.macos-arm64" = { checksum = "sha256:1e620252db7964d876da6b4956872ad84d099ee281753ac7c850ae24413947df", url = "https://github.com/mitsuhiko/insta/releases/download/1.46.3/cargo-insta-aarch64-apple-darwin.tar.xz"}
 
 [[tools."cargo:cargo-audit"]]
 version = "0.22.1"
@@ -33,7 +31,7 @@ version = "0.19.0"
 backend = "cargo:cargo-deny"
 
 [[tools."cargo:cargo-dist"]]
-version = "0.30.4"
+version = "0.31.0"
 backend = "cargo:cargo-dist"
 
 [[tools."cargo:cargo-llvm-cov"]]
@@ -45,7 +43,7 @@ version = "0.9.1"
 backend = "cargo:cargo-machete"
 
 [[tools."cargo:cargo-nextest"]]
-version = "0.9.128"
+version = "0.9.129"
 backend = "cargo:cargo-nextest"
 
 [[tools."cargo:cargo-outdated"]]
@@ -53,7 +51,7 @@ version = "0.17.0"
 backend = "cargo:cargo-outdated"
 
 [[tools."cargo:cargo-release"]]
-version = "1.0.0"
+version = "1.1.1"
 backend = "cargo:cargo-release"
 
 [[tools."cargo:git-cliff"]]
@@ -84,10 +82,6 @@ backend = "cargo:mdbook-mermaid"
 version = "3.0.0"
 backend = "cargo:mdbook-open-on-gh"
 
-[[tools."cargo:mdbook-tabs"]]
-version = "0.3.4"
-backend = "cargo:mdbook-tabs"
-
 [[tools."cargo:mdbook-toc"]]
 version = "0.15.3"
 backend = "cargo:mdbook-toc"
@@ -96,11 +90,6 @@ backend = "cargo:mdbook-toc"
 version = "0.3.156"
 backend = "cargo:release-plz"
 
-[[tools.claude-code]]
-version = "2.1.47"
-backend = "aqua:anthropics/claude-code"
-"platforms.macos-arm64" = { checksum = "blake3:ada0f49eefe910715db055bf2b4024505b374eeaccebd43b32abdff556956dbc", url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.47/darwin-arm64/claude"}
-
 [[tools.just]]
 version = "1.46.0"
 backend = "aqua:casey/just"
@@ -108,7 +97,6 @@ backend = "aqua:casey/just"
 [[tools.lychee]]
 version = "0.23.0"
 backend = "aqua:lycheeverse/lychee"
-"platforms.macos-arm64" = { checksum = "sha256:4c8034900e11083b68ac6f6582c377ff1f704e268991999e09d717973e493e7f", url = "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.23.0/lychee-arm64-macos.dmg"}
 
 [[tools.markdownlint-cli2]]
 version = "0.21.0"

@@ -21,6 +21,11 @@ default:
 setup:
     mise install
 
+update-deps:
+    @{{ mise_exec }} cargo update
+    @{{ mise_exec }} pre-commit autoupdate
+    @{{ mise_exec }} cargo outdated --depth=1 --exit-code=1
+
 # =============================================================================
 # FORMATTING AND LINTING
 # =============================================================================
@@ -230,9 +235,8 @@ changelog:
 # Dependencies
 # ==============================================================================
 
-# Update dependencies
-update:
-    @{{ mise_exec }} cargo update
+# Update dependencies (alias for update-deps)
+update: update-deps
 
 # =============================================================================
 # CLEANING

@@ -150,7 +150,7 @@ compression-all = [
 [dependencies]
 anyhow      = "1.0.102"
 async-trait = "0.1.89"
-chrono      = { version = "0.4.43", features = [ "serde" ] }
+chrono      = { version = "0.4.44", features = [ "serde" ] }
 # CLI
 clap = { version = "4.5.60", features = [ "derive", "env" ] }
 
@@ -171,7 +171,7 @@ ignore = "0.4.25"
 
 # Progress display
 indicatif = "0.18.4"
-quick-xml = "0.39.1"
+quick-xml = "0.39.2"
 regex     = "1.12.3"
 
 # LLM providers (feature-gated)
@@ -190,7 +190,7 @@ tiktoken-rs = "0.9.1"
 
 # Async runtime
 tokio = { version = "1.49.0", features = [ "full" ] }
-toml  = "0.9.8"
+toml  = "1.0.3"
 
 # Logging
 tracing            = "0.1.44"
@@ -211,7 +211,7 @@ tracing-subscriber = { version = "0.3.22", features = [ "env-filter" ] }
 #
 # Note: Language parsers haven't released 0.26.x versions yet, but they're compatible
 # with tree-sitter 0.26.3 due to backward compatibility support.
-tree-sitter            = "0.26.5"
+tree-sitter            = "0.26.6"
 tree-sitter-go         = { version = "0.25.0", optional = true }
 tree-sitter-python     = { version = "0.25.0", optional = true }
 tree-sitter-rust       = { version = "0.24.0", optional = true }
@@ -222,7 +222,7 @@ criterion = { version = "0.8.2", features = [ "html_reports" ] }
 git-cliff = "2.12.0"
 insta     = "1.46.3"
 mockito   = "1.7.2"
-tempfile  = "3.25.0"
+tempfile  = "3.26.0"
 typos     = "0.10.41"
 
 [[bench]]

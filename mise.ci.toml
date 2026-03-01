@@ -1,0 +1,27 @@
+# CI-specific overrides — disables dev-only tools that aren't needed in CI pipelines.
+# Activated by setting MISE_ENV=ci in GitHub Actions workflows.
+
+[settings]
+disable_tools = [
+    "act",
+    "actionlint",
+    "cargo:cargo-auditable",
+    "cargo:cargo-cyclonedx",
+    "cargo:cargo-outdated",
+    "cargo:cargo-release",
+    "cargo:git-cliff",
+    "cargo:mdbook",
+    "cargo:mdbook-admonish",
+    "cargo:mdbook-i18n-helpers",
+    "cargo:mdbook-linkcheck",
+    "cargo:mdbook-mermaid",
+    "cargo:mdbook-open-on-gh",
+    "cargo:mdbook-toc",
+    "cargo:release-plz",
+    "lychee",
+    "markdownlint-cli2",
+    "pipx:mdformat",
+    "pipx:pre-commit",
+    "prettier",
+    "scorecard",
+]

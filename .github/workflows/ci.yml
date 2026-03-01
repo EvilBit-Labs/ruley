@@ -22,6 +22,7 @@ env:
     CARGO_TERM_COLOR: always
     CI: true
     GITHUB_ACTIONS: true
+    MISE_ENV: ci
 
 jobs:
     quality:

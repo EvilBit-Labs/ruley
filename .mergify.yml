@@ -29,6 +29,19 @@ pull_request_rules:
       queue:
         name: default
 
+  - name: Auto-approve and queue dosu PRs
+    conditions:
+      - base = main
+      - author = dosubot[bot]
+      - -draft
+      - label != do-not-merge
+    actions:
+      review:
+        type: APPROVE
+        message: Automatically approved by Mergify
+      queue:
+        name: default
+
   - name: Auto-queue release-plz PRs
     conditions:
       - base = main
@@ -58,6 +71,7 @@ pull_request_rules:
       - base = main
       - "-author=@maintainers"
       - author != dependabot[bot]
+      - author != dosubot[bot]
       - "-head ~= ^release-plz-"
       - -draft
       - "approved-reviews-by=@maintainers"

@@ -50,7 +50,9 @@ skip-tree = []
 [advisories]
 yanked = "deny"
 unmaintained = "workspace"
-ignore = []
+ignore = [
+    { id = "RUSTSEC-2025-0141", reason = "bincode v1.3.3 is a transitive dependency of git-cliff (dev-dependency). It is unmaintained but not a security vulnerability. The bincode team explicitly states v1.3.3 is complete and stable. No known exploitable vulnerabilities exist in this version. Monitor upstream crates for future migration to alternative serialization formats (postcard, bitcode, rkyv, or wincode)." },
+]
 
 [sources]
 unknown-registry = "deny"

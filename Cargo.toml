@@ -189,7 +189,7 @@ thiserror = "2.0.18"
 tiktoken-rs = "0.9.1"
 
 # Async runtime
-tokio = { version = "1.49.0", features = [ "full" ] }
+tokio = { version = "1.50.0", features = [ "full" ] }
 toml  = "1.0.6"
 
 # Logging

@@ -152,7 +152,7 @@ anyhow      = "1.0.102"
 async-trait = "0.1.89"
 chrono      = { version = "0.4.44", features = [ "serde" ] }
 # CLI
-clap = { version = "4.5.60", features = [ "derive", "env" ] }
+clap = { version = "4.6.0", features = [ "derive", "env" ] }
 
 # Configuration
 config  = { version = "0.15.19", features = [ "toml" ] }

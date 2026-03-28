@@ -190,7 +190,7 @@ tiktoken-rs = "0.9.1"
 
 # Async runtime
 tokio = { version = "1.50.0", features = [ "full" ] }
-toml  = "1.0.6"
+toml  = "1.0.7"
 
 # Logging
 tracing            = "0.1.44"
